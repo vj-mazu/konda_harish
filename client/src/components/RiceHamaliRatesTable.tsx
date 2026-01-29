@@ -214,8 +214,6 @@ const RiceHamaliRatesTable: React.FC = () => {
   const [formData, setFormData] = useState({
     work_type: '',
     work_detail: '',
-    rate_18_21: '',
-    rate_21_24: '',
     rate_24_27: '',
     display_order: ''
   });
@@ -312,8 +310,8 @@ const RiceHamaliRatesTable: React.FC = () => {
 
       const data = {
         ...formData,
-        rate_18_21: parseFloat(formData.rate_18_21) || 0,
-        rate_21_24: parseFloat(formData.rate_21_24) || 0,
+        rate_18_21: 0, // Always 0
+        rate_21_24: 0, // Always 0
         rate_24_27: parseFloat(formData.rate_24_27) || 0,
         display_order: parseInt(formData.display_order) || 0,
         is_active: true // Always set to true for new/updated rates
@@ -369,8 +367,6 @@ const RiceHamaliRatesTable: React.FC = () => {
     setFormData({
       work_type: rate.work_type,
       work_detail: rate.work_detail,
-      rate_18_21: rate.rate_18_21 ? Number(rate.rate_18_21).toString() : '0',
-      rate_21_24: rate.rate_21_24 ? Number(rate.rate_21_24).toString() : '0',
       rate_24_27: rate.rate_24_27 ? Number(rate.rate_24_27).toString() : '0',
       display_order: rate.display_order ? rate.display_order.toString() : '0'
     });
@@ -416,8 +412,6 @@ const RiceHamaliRatesTable: React.FC = () => {
     setFormData({
       work_type: '',
       work_detail: '',
-      rate_18_21: '',
-      rate_21_24: '',
       rate_24_27: '',
       display_order: ''
     });
@@ -484,35 +478,14 @@ const RiceHamaliRatesTable: React.FC = () => {
               </FormGroup>
 
               <FormGroup>
-                <Label>Rate 18-21</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.rate_18_21}
-                  onChange={(e) => setFormData({ ...formData, rate_18_21: e.target.value })}
-                  placeholder="0.00"
-                />
-              </FormGroup>
-
-              <FormGroup>
-                <Label>Rate 21-24</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.rate_21_24}
-                  onChange={(e) => setFormData({ ...formData, rate_21_24: e.target.value })}
-                  placeholder="0.00"
-                />
-              </FormGroup>
-
-              <FormGroup>
-                <Label>Rate 24-27</Label>
+                <Label>Rate (Above 24 feet)</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={formData.rate_24_27}
                   onChange={(e) => setFormData({ ...formData, rate_24_27: e.target.value })}
                   placeholder="0.00"
+                  required
                 />
               </FormGroup>
 
@@ -546,9 +519,7 @@ const RiceHamaliRatesTable: React.FC = () => {
               <Th>S.No</Th>
               <Th>Work</Th>
               <Th>Details</Th>
-              <Th>18-21</Th>
-              <Th>21-24</Th>
-              <Th>24-27</Th>
+              <Th>Rate (Above 24 feet)</Th>
               <Th>Actions</Th>
             </tr>
           </thead>
@@ -556,7 +527,7 @@ const RiceHamaliRatesTable: React.FC = () => {
             {Object.entries(rates).map(([workType, workRates]) => (
               <React.Fragment key={workType}>
                 <WorkTypeHeader>
-                  <td colSpan={7}>
+                  <td colSpan={5}>
                     <strong>{workType}</strong>
                   </td>
                 </WorkTypeHeader>
@@ -565,8 +536,6 @@ const RiceHamaliRatesTable: React.FC = () => {
                     <Td>{rate.display_order || index + 1}</Td>
                     <Td>{rate.work_type}</Td>
                     <Td>{rate.work_detail}</Td>
-                    <RateCell>{rate.rate_18_21 ? Number(rate.rate_18_21).toFixed(2) : '0.00'}</RateCell>
-                    <RateCell>{rate.rate_21_24 ? Number(rate.rate_21_24).toFixed(2) : '0.00'}</RateCell>
                     <RateCell>{rate.rate_24_27 ? Number(rate.rate_24_27).toFixed(2) : '0.00'}</RateCell>
                     <Td>
                       <ButtonGroup>

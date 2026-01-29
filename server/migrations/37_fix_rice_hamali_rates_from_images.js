@@ -4,16 +4,10 @@ async function up() {
   console.log('🔄 Fixing Rice Hamali rates with exact data from images...');
 
   try {
-    // ALWAYS skip this migration - data is already correct from migration 36
-    // This migration was causing FK constraint errors due to DELETE
-    const [existingRates] = await sequelize.query('SELECT COUNT(*) as count FROM rice_hamali_rates');
-    const count = parseInt(existingRates[0].count) || 0;
-
-    // Skip if ANY rates exist (not just >= 60)
-    if (count > 0) {
-      console.log('✅ Rice hamali rates already exist (count: ' + count + '), skipping migration 37');
-      return;
-    }
+    // Clear existing rates to ensure exact match with images
+    // Since we are resetting the database, this is safe and necessary
+    await sequelize.query('DELETE FROM rice_hamali_rates');
+    console.log('🗑️ Existing rice hamali rates cleared.');
 
     // Insert exact rice hamali rates data from the three images
     // ONLY rate_24_27 (Above 24 feet) is needed - other two rates removed

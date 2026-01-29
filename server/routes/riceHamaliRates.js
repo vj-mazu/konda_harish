@@ -11,8 +11,6 @@ router.get('/', auth, async (req, res) => {
         id,
         work_type,
         work_detail,
-        COALESCE(rate_18_21, 0) as rate_18_21,
-        COALESCE(rate_21_24, 0) as rate_21_24,
         COALESCE(rate_24_27, 0) as rate_24_27,
         is_active,
         display_order
@@ -56,8 +54,6 @@ router.get('/work-type/:workType', auth, async (req, res) => {
         id,
         work_type,
         work_detail,
-        COALESCE(rate_18_21, 0) as rate_18_21,
-        COALESCE(rate_21_24, 0) as rate_21_24,
         COALESCE(rate_24_27, 0) as rate_24_27,
         is_active,
         display_order
