@@ -238,8 +238,6 @@ interface RiceHamaliRate {
   id: number;
   work_type: string;
   work_detail: string;
-  rate_18_21: number;
-  rate_21_24: number;
   rate_24_27: number;
   is_active: boolean;
   display_order: number;
@@ -475,7 +473,13 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
 
       console.log('Rice Hamali Rates Response:', response.data);
       if (response.data.success && response.data.data.flatRates) {
-        setRiceRates(response.data.data.flatRates);
+        // Ensure rate_24_27 is a valid number
+        const validRates = response.data.data.flatRates.map(rate => ({
+          ...rate,
+          rate_24_27: Number(rate.rate_24_27) || 0
+        }));
+        console.log('Processed rates:', validRates);
+        setRiceRates(validRates);
       }
     } catch (error) {
       console.error('Error fetching rice hamali rates:', error);
@@ -558,7 +562,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
               riceEntries.push({
                 workType: rate.work_type,
                 workDetail: rate.work_detail,
-                rate: rate.rate_18_21, // Use first rate for now
+                rate: rate.rate_24_27, // Use Above 24 feet rate
                 bags: split.bags,
                 workerName: split.name,
                 batchNumber: split.batchNumber
@@ -569,7 +573,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
             riceEntries.push({
               workType: rate.work_type,
               workDetail: rate.work_detail,
-              rate: rate.rate_18_21,
+              rate: rate.rate_24_27,
               bags: riceProduction.bags
             });
           }
@@ -608,7 +612,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
           workType: rate.work_type,
           workDetail: rate.work_detail,
           description: otherWorkDescription.trim(),
-          rate: rate.rate_18_21,
+          rate: rate.rate_24_27,
           bags: split.bags,
           workerName: split.name,
           batchNumber: split.batchNumber
@@ -744,7 +748,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                     </div>
                     {hasSingleOption && singleRate && (
                       <div style={{ fontWeight: 'bold', color: '#10b981', fontSize: '0.75rem' }}>
-                        ₹{Number(singleRate.rate_18_21).toFixed(0)}
+                        ₹{Number(singleRate.rate_24_27).toFixed(0)}
                       </div>
                     )}
                   </div>
@@ -767,7 +771,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                         <option value="">Select...</option>
                         {options.map(rate => (
                           <option key={rate.id} value={rate.id}>
-                            {rate.work_detail} - ₹{Number(rate.rate_18_21).toFixed(0)}
+                            {rate.work_detail} - ₹{Number(rate.rate_24_27).toFixed(0)}
                           </option>
                         ))}
                       </Select>
@@ -786,7 +790,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                   const bags = riceProduction.bags;
                   const rateId = selectedRateIds[type];
                   const rate = riceRates.find(r => r.id === rateId);
-                  const amount = rate ? Number(rate.rate_18_21) * bags : 0;
+                  const amount = rate ? Number(rate.rate_24_27) * bags : 0;
                   const splits = workerSplits[type] || [];
                   const hasSplits = splits.length > 0;
 
@@ -796,7 +800,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                         <div style={{ fontWeight: 600, color: '#065f46' }}>{type}</div>
                         {rate && (
                           <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                            {rate.work_detail} • {bags} bags × ₹{Number(rate.rate_18_21).toFixed(2)}
+                            {rate.work_detail} • {bags} bags × ₹{Number(rate.rate_24_27).toFixed(2)}
                             {hasSplits && (
                               <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: '#059669' }}>
                                 Split between {splits.length} worker{splits.length > 1 ? 's' : ''}
@@ -844,7 +848,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                       const bags = riceProduction.bags;
                       const rateId = selectedRateIds[type];
                       const rate = riceRates.find(r => r.id === rateId);
-                      return total + (rate ? Number(rate.rate_18_21) * bags : 0);
+                      return total + (rate ? Number(rate.rate_24_27) * bags : 0);
                     }, 0).toFixed(2)}
                   </div>
                 </TypeItem>
@@ -872,7 +876,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                   <optgroup key={workType} label={workType}>
                     {rates.map(rate => (
                       <option key={rate.id} value={rate.id}>
-                        {rate.work_detail} (₹{Number(rate.rate_18_21).toFixed(2)}/bag)
+                        {rate.work_detail} (₹{Number(rate.rate_24_27).toFixed(2)}/bag)
                       </option>
                     ))}
                   </optgroup>
@@ -923,7 +927,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
               color: selectedOtherWork && otherWorkBags > 0 ? '#059669' : '#6b7280'
             }}>
               Total Amount: ₹{selectedOtherWork && otherWorkBags > 0 ?
-                ((riceRates.find(r => r.id === selectedOtherWork)?.rate_18_21 || 0) * otherWorkBags).toFixed(2) :
+                ((riceRates.find(r => r.id === selectedOtherWork)?.rate_24_27 || 0) * otherWorkBags).toFixed(2) :
                 '0.00'
               }
             </div>
@@ -966,7 +970,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
               <TypesList>
                 {otherWorkSplits.map((split, idx) => {
                   const rate = riceRates.find(r => r.id === selectedOtherWork);
-                  const amount = rate ? Number(rate.rate_18_21) * split.bags : 0;
+                  const amount = rate ? Number(rate.rate_24_27) * split.bags : 0;
                   return (
                     <TypeItem key={idx}>
                       <div>
@@ -974,7 +978,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                           Batch {split.batchNumber}: {split.name}
                         </div>
                         <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                          {split.bags} bags × ₹{rate ? Number(rate.rate_18_21).toFixed(2) : '0.00'}
+                          {split.bags} bags × ₹{rate ? Number(rate.rate_24_27).toFixed(2) : '0.00'}
                         </div>
                       </div>
                       <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#92400e' }}>
@@ -988,7 +992,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                   <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: '#92400e' }}>
                     ₹{otherWorkSplits.reduce((total, split) => {
                       const rate = riceRates.find(r => r.id === selectedOtherWork);
-                      return total + (rate ? Number(rate.rate_18_21) * split.bags : 0);
+                      return total + (rate ? Number(rate.rate_24_27) * split.bags : 0);
                     }, 0).toFixed(2)}
                   </div>
                 </TypeItem>
