@@ -258,8 +258,14 @@ const RiceHamaliRatesTable: React.FC = () => {
       }
 
       console.log('Fetching rice hamali rates...');
-      const response = await axios.get<{ success: boolean; data: { rates: GroupedRates } }>('/rice-hamali-rates', {
-        headers: { Authorization: `Bearer ${token}` }
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await axios.get<{ success: boolean; data: { rates: GroupedRates } }>(`/rice-hamali-rates?t=${timestamp}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       console.log('Rice hamali rates response:', response.data);
       
@@ -331,8 +337,12 @@ const RiceHamaliRatesTable: React.FC = () => {
         toast.success('Rice hamali rate added successfully');
       }
 
+      // Reset form first
       resetForm();
-      fetchRates();
+      
+      // Wait a moment for database to commit, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await fetchRates();
     } catch (error: any) {
       console.error('Error saving rice hamali rate:', error);
       console.error('Error response:', error.response?.data);
