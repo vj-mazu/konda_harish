@@ -748,7 +748,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                     </div>
                     {hasSingleOption && singleRate && (
                       <div style={{ fontWeight: 'bold', color: '#10b981', fontSize: '0.75rem' }}>
-                        ₹{Number(singleRate.rate_24_27).toFixed(0)}
+                        ₹{(Number(singleRate.rate_24_27) || 0).toFixed(0)}
                       </div>
                     )}
                   </div>
@@ -771,7 +771,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                         <option value="">Select...</option>
                         {options.map(rate => (
                           <option key={rate.id} value={rate.id}>
-                            {rate.work_detail} - ₹{Number(rate.rate_24_27).toFixed(0)}
+                            {rate.work_detail} - ₹{(Number(rate.rate_24_27) || 0).toFixed(0)}
                           </option>
                         ))}
                       </Select>
@@ -800,7 +800,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                         <div style={{ fontWeight: 600, color: '#065f46' }}>{type}</div>
                         {rate && (
                           <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                            {rate.work_detail} • {bags} bags × ₹{Number(rate.rate_24_27).toFixed(2)}
+                            {rate.work_detail} • {bags} bags × ₹{(Number(rate.rate_24_27) || 0).toFixed(2)}
                             {hasSplits && (
                               <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: '#059669' }}>
                                 Split between {splits.length} worker{splits.length > 1 ? 's' : ''}
@@ -819,7 +819,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                         )}
                       </div>
                       <div>
-                        {rate && <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>₹{amount.toFixed(2)}</div>}
+                        {rate && <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>₹{(Number(amount) || 0).toFixed(2)}</div>}
                         {!hasSplits && (
                           <button
                             onClick={() => setShowSplitModal(type)}
@@ -876,7 +876,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                   <optgroup key={workType} label={workType}>
                     {rates.map(rate => (
                       <option key={rate.id} value={rate.id}>
-                        {rate.work_detail} (₹{Number(rate.rate_24_27).toFixed(2)}/bag)
+                        {rate.work_detail} (₹{(Number(rate.rate_24_27) || 0).toFixed(2)}/bag)
                       </option>
                     ))}
                   </optgroup>
@@ -927,7 +927,7 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
               color: selectedOtherWork && otherWorkBags > 0 ? '#059669' : '#6b7280'
             }}>
               Total Amount: ₹{selectedOtherWork && otherWorkBags > 0 ?
-                ((riceRates.find(r => r.id === selectedOtherWork)?.rate_24_27 || 0) * otherWorkBags).toFixed(2) :
+                ((Number(riceRates.find(r => r.id === selectedOtherWork)?.rate_24_27) || 0) * otherWorkBags).toFixed(2) :
                 '0.00'
               }
             </div>
@@ -978,11 +978,11 @@ const InlineRiceHamaliForm: React.FC<Props> = ({ riceProduction, onClose, onSave
                           Batch {split.batchNumber}: {split.name}
                         </div>
                         <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                          {split.bags} bags × ₹{rate ? Number(rate.rate_24_27).toFixed(2) : '0.00'}
+                          {split.bags} bags × ₹{rate ? (Number(rate.rate_24_27) || 0).toFixed(2) : '0.00'}
                         </div>
                       </div>
                       <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#92400e' }}>
-                        ₹{amount.toFixed(2)}
+                        ₹{(Number(amount) || 0).toFixed(2)}
                       </div>
                     </TypeItem>
                   );
