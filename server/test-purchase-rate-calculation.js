@@ -8,7 +8,7 @@
 // Test data
 const testCases = [
   {
-    name: 'MDL - H should be SUBTRACTED',
+    name: 'MDL - H positive should be ADDED',
     rateType: 'MDL',
     bags: 100,
     actualNetWeight: 28500,
@@ -23,11 +23,11 @@ const testCases = [
     lf: 0,
     lfCalculationMethod: 'per_bag',
     egb: 1,
-    expectedHContribution: -500, // Should be negative
-    expectedTotal: 571450
+    expectedHContribution: 500, // Positive H = ADDED
+    expectedTotal: 572450 // 569000 + 500 + 2850 + 0 + 100
   },
   {
-    name: 'MDWB - H should be SUBTRACTED',
+    name: 'MDWB - H positive should be ADDED',
     rateType: 'MDWB',
     bags: 100,
     actualNetWeight: 28500,
@@ -42,8 +42,8 @@ const testCases = [
     lf: 0,
     lfCalculationMethod: 'per_bag',
     egb: 0,
-    expectedHContribution: -500, // Should be negative
-    expectedTotal: 571350 // 569000 - 500 + 2850 + 0 + 0
+    expectedHContribution: 500, // Positive H = ADDED
+    expectedTotal: 572350 // 569000 + 500 + 2850 + 0 + 0
   },
   {
     name: 'CDL - H should be ADDED',
@@ -82,6 +82,44 @@ const testCases = [
     egb: 0,
     expectedHContribution: 500, // Should be positive
     expectedTotal: 572550 // 569000 + 500 + 2850 + 200 + 0
+  },
+  {
+    name: 'MDL - H negative should be EXCLUDED (0)',
+    rateType: 'MDL',
+    bags: 100,
+    actualNetWeight: 28500,
+    sute: 0.5,
+    suteCalculationMethod: 'per_bag',
+    baseRate: 2000,
+    baseRateCalculationMethod: 'per_quintal',
+    h: -5,
+    hCalculationMethod: 'per_bag',
+    b: 10,
+    bCalculationMethod: 'per_quintal',
+    lf: 0,
+    lfCalculationMethod: 'per_bag',
+    egb: 1,
+    expectedHContribution: 0, // Negative H = 0 (excluded)
+    expectedTotal: 571950 // 569000 + 0 + 2850 + 0 + 100
+  },
+  {
+    name: 'MDWB - H negative should be EXCLUDED (0)',
+    rateType: 'MDWB',
+    bags: 100,
+    actualNetWeight: 28500,
+    sute: 0.5,
+    suteCalculationMethod: 'per_bag',
+    baseRate: 2000,
+    baseRateCalculationMethod: 'per_quintal',
+    h: -5,
+    hCalculationMethod: 'per_bag',
+    b: 10,
+    bCalculationMethod: 'per_quintal',
+    lf: 0,
+    lfCalculationMethod: 'per_bag',
+    egb: 0,
+    expectedHContribution: 0, // Negative H = 0 (excluded)
+    expectedTotal: 571850 // 569000 + 0 + 2850 + 0 + 0
   }
 ];
 
@@ -155,9 +193,11 @@ function calculatePurchaseRate(testCase) {
   const egbAmount = showEGB ? bags * egb : 0;
 
   // 8. Total Amount - THE FIX IS HERE
-  // For MDL and MDWB: H is SUBTRACTED from total (negative contribution)
-  // For CDL and CDWB: H is ADDED to total (positive contribution)
-  const hContribution = ['MDL', 'MDWB'].includes(rateType) ? -hAmount : hAmount;
+  // For MDL/MDWB: If H is negative (user signal to exclude), set to 0. If positive, add it.
+  // For CDL/CDWB: Use H value as-is
+  const hContribution = ['MDL', 'MDWB'].includes(rateType) 
+    ? (hAmount < 0 ? 0 : hAmount)  // MDL/MDWB: negative = 0, positive = add
+    : hAmount;                      // CDL/CDWB: use as-is
   const totalAmount = baseRateAmount + hContribution + bAmount + lfAmount + egbAmount;
 
   // 9. Average Rate Calculation (per 75kg)

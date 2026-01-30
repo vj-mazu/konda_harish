@@ -9737,9 +9737,12 @@ const Records: React.FC = () => {
                                             const showEGB = ['CDL', 'MDL'].includes(rateFormData.rateType);
                                             const egbAmount = showEGB ? bags * parseFloat(rateFormData.egb || '0') : 0;
 
-                                            // 6. H Contribution (MDL and MDWB: H is SUBTRACTED)
-                                            // Use Math.abs to ensure H is always treated as positive, then negate for MDL/MDWB
-                                            const hContribution = ['MDL', 'MDWB'].includes(rateFormData.rateType) ? -Math.abs(hAmount) : Math.abs(hAmount);
+                                            // 6. H Contribution
+                                            // For MDL/MDWB: If H is negative (user signal to exclude), set to 0. If positive, add it.
+                                            // For CDL/CDWB: Use H value as-is
+                                            const hContribution = ['MDL', 'MDWB'].includes(rateFormData.rateType) 
+                                              ? (hAmount < 0 ? 0 : hAmount)  // MDL/MDWB: negative = 0, positive = add
+                                              : hAmount;                      // CDL/CDWB: use as-is
 
                                             // 7. Total = Base Amount + All Adjustments
                                             const totalAmount = baseRateAmount + hContribution + bAmount + lfAmount + egbAmount;

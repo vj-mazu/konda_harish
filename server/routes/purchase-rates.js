@@ -242,10 +242,11 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
     const egbAmount = showEGB ? bags * egbNum : 0;
 
     // 7. Total Amount = Base Rate Amount (on Sute Net Weight) + Adjustments (on Original Weight)
-    // For MDL and MDWB: H is SUBTRACTED from total (negative contribution)
-    // For CDL and CDWB: H is ADDED to total (positive contribution)
-    // Use Math.abs to ensure H is always treated as positive value, then negate for MDL/MDWB
-    const hContribution = ['MDL', 'MDWB'].includes(rateType) ? -Math.abs(hAmount) : Math.abs(hAmount);
+    // For MDL and MDWB: If H is negative (user signal to exclude), set to 0. If positive, add it.
+    // For CDL and CDWB: Use H value as-is
+    const hContribution = ['MDL', 'MDWB'].includes(rateType) 
+      ? (hAmount < 0 ? 0 : hAmount)  // MDL/MDWB: negative = 0, positive = add
+      : hAmount;                      // CDL/CDWB: use as-is
     const totalAmount = baseRateAmount + hContribution + bAmount + lfAmount + egbAmount;
 
     // 8. Average Rate Calculation (per 75kg)
