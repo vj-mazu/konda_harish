@@ -113,8 +113,8 @@ router.get('/', auth, async (req, res) => {
                 END as workDetail,
                 
                 rhe.bags,
-                rhr.rate_21_24 as rateperbag,
-                (rhe.bags * rhr.rate_21_24) as totalamount,
+                rhr.rate_24_27 as rateperbag,
+                (rhe.bags * rhr.rate_24_27) as totalamount,
                 COALESCE(rhe.remarks, '') as remarks,
                 rhe.entry_type,
                 rhe.created_at as createdAt,
