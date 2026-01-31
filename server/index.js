@@ -860,6 +860,87 @@ const startServer = async () => {
         console.log('⚠️ Migration 60 warning:', error.message);
       }
 
+      // Migration 63: Add rate and amount columns to rice_hamali_entries
+      try {
+        console.log('🔄 Migration 63: Adding rate and amount columns to rice_hamali_entries...');
+        
+        // Check if columns already exist
+        const [existingColumns] = await sequelize.query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name = 'rice_hamali_entries'
+            AND column_name IN ('rate', 'amount')
+        `);
+        
+        const hasRate = existingColumns.some(col => col.column_name === 'rate');
+        const hasAmount = existingColumns.some(col => col.column_name === 'amount');
+
+        if (hasRate && hasAmount) {
+          console.log('✅ Migration 63: Rate and amount columns already exist, skipping');
+        } else {
+          // Add rate column if missing
+          if (!hasRate) {
+            await sequelize.query(`
+              ALTER TABLE rice_hamali_entries
+              ADD COLUMN rate DECIMAL(10, 2)
+            `);
+            console.log('  ✅ Rate column added');
+          }
+
+          // Add amount column if missing
+          if (!hasAmount) {
+            await sequelize.query(`
+              ALTER TABLE rice_hamali_entries
+              ADD COLUMN amount DECIMAL(10, 2)
+            `);
+            console.log('  ✅ Amount column added');
+          }
+
+          // Backfill existing entries
+          await sequelize.query(`
+            UPDATE rice_hamali_entries rhe
+            SET 
+              rate = rhr.rate_24_27,
+              amount = (rhe.bags * rhr.rate_24_27)
+            FROM rice_hamali_rates rhr
+            WHERE rhe.rice_hamali_rate_id = rhr.id
+              AND (rhe.rate IS NULL OR rhe.amount IS NULL)
+          `);
+          console.log('  ✅ Backfilled existing entries');
+
+          // Make columns NOT NULL
+          await sequelize.query(`
+            ALTER TABLE rice_hamali_entries
+            ALTER COLUMN rate SET NOT NULL
+          `);
+          await sequelize.query(`
+            ALTER TABLE rice_hamali_entries
+            ALTER COLUMN amount SET NOT NULL
+          `);
+          console.log('  ✅ Columns set to NOT NULL');
+
+          // Add indexes
+          try {
+            await sequelize.query(`
+              CREATE INDEX IF NOT EXISTS idx_rice_hamali_entries_rate 
+              ON rice_hamali_entries(rate)
+            `);
+            await sequelize.query(`
+              CREATE INDEX IF NOT EXISTS idx_rice_hamali_entries_amount 
+              ON rice_hamali_entries(amount)
+            `);
+            console.log('  ✅ Indexes added');
+          } catch (indexError) {
+            console.log('  ℹ️ Indexes might already exist');
+          }
+
+          console.log('✅ Migration 63: Rice hamali rate and amount columns added successfully');
+          console.log('  📝 Historical rates are now preserved!');
+        }
+      } catch (error) {
+        console.log('⚠️ Migration 63 warning:', error.message);
+      }
+
       // Auto-fix: RJ Broken and Rejection Rice product types
       try {
         console.log('🔄 Auto-fixing product types (RJ Broken, Rejection Rice)...');
