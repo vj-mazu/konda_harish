@@ -7763,11 +7763,21 @@ const Records: React.FC = () => {
 
                         // For backward compatibility, also calculate kunchinittu-wise stock
                         const kunchinintuStock: { [key: string]: { bags: number; variety: string; kunchinittu: string; warehouse: string } } = {};
+                        const processedKunchinintuKeys = new Set<string>(); // CRITICAL FIX: Track processed keys to prevent duplication
+                        
                         openingStockItems.forEach((item: any) => {
                           const locationParts = (item.locationCode || item.location || '').split(' - ');
                           const kunchinittu = locationParts[0] || '';
                           const warehouse = locationParts[1] || '';
                           const key = `${item.variety}|${kunchinittu}`;
+                          
+                          // CRITICAL DUPLICATION FIX: Normalize key and check if already processed
+                          const normalizedKey = key.toUpperCase();
+                          if (processedKunchinintuKeys.has(normalizedKey)) {
+                            console.log(`🔍 PADDY DEDUP: Skipping duplicate kunchinittu key: ${key}`);
+                            return; // Skip this iteration to prevent double-counting
+                          }
+                          processedKunchinintuKeys.add(normalizedKey);
 
                           if (!kunchinintuStock[key]) {
                             kunchinintuStock[key] = { bags: 0, variety: item.variety, kunchinittu, warehouse };
@@ -7777,6 +7787,16 @@ const Records: React.FC = () => {
 
                         const kunchinintuTotal = Object.values(kunchinintuStock).reduce((sum: number, item: any) => sum + item.bags, 0);
                         const productionTotal = Object.values(productionShiftingBags).reduce((sum: number, item: any) => sum + item.bags, 0);
+
+                        // CRITICAL DUPLICATION FIX: Debug logging for paddy stock
+                        console.log('🔍 DEBUG - Paddy Stock Kunchinittu Deduplication for', date, ':', {
+                          totalOpeningStockItems: openingStockItems.length,
+                          uniqueKunchinintuKeysProcessed: processedKunchinintuKeys.size,
+                          duplicatesSkipped: openingStockItems.length - processedKunchinintuKeys.size,
+                          finalKunchinintuStockEntries: Object.keys(kunchinintuStock).length,
+                          kunchinintuTotal,
+                          productionTotal
+                        });
 
                         return (
                           <>
@@ -7849,78 +7869,6 @@ const Records: React.FC = () => {
                                                         color: '#2563eb'
                                                       }}
                                                         onClick={() => {
-                                                          console.log('🔗 Opening ledger for kunchinittu:', item.kunchinittu);
-                                                          const url = `/ledger?code=${item.kunchinittu}`;
-                                                          window.open(url, '_blank');
-                                                        }}
-                                                      >
-                                                        {item.kunchinittu} - {item.warehouse}
-                                                      </td>
-                                                    </tr>
-                                                  );
-                                                })}
-                                            </tbody>
-                                          </table>
-                                          {/* Compact Kunchinittu-wise summary table (below detailed variety-wise) */}
-                                          <table style={{
-                                            width: '100%',
-                                            borderCollapse: 'collapse',
-                                            fontFamily: 'Calibri, sans-serif',
-                                            fontSize: '11pt',
-                                            marginBottom: '5px',
-                                            border: 'none'
-                                          }}>
-                                            <tbody>
-                                              {Object.values(kunchinintuStock)
-                                                .filter((item: any) => item.bags > 0)
-                                                .sort((a: any, b: any) => {
-                                                  // Sort by variety first, then by kunchinittu
-                                                  const varietyCompare = a.variety.localeCompare(b.variety);
-                                                  if (varietyCompare !== 0) return varietyCompare;
-                                                  return a.kunchinittu.localeCompare(b.kunchinittu);
-                                                })
-                                                .map((item: any, idx: number) => {
-                                                  // Check if this kunchinittu was used for production shifting, purchase, OR shifting today
-                                                  const isUsedToday = dateRecords.some((rec: Arrival) =>
-                                                    (rec.movementType === 'production-shifting' || rec.movementType === 'purchase' || rec.movementType === 'shifting') &&
-                                                    (rec.fromKunchinittu?.code === item.kunchinittu || rec.toKunchinittu?.code === item.kunchinittu)
-                                                  );
-
-                                                  return (
-                                                    <tr key={idx}>
-                                                      <td style={{
-                                                        padding: '4px 8px',
-                                                        border: 'none',
-                                                        backgroundColor: isUsedToday ? '#fff3cd' : 'transparent',
-                                                        fontWeight: 'bold',
-                                                        width: '10%',
-                                                        textAlign: 'right'
-                                                      }}>
-                                                        {item.bags}
-                                                      </td>
-                                                      <td style={{
-                                                        padding: '4px 8px',
-                                                        border: 'none',
-                                                        backgroundColor: 'transparent',
-                                                        fontWeight: 'bold',
-                                                        width: '15%',
-                                                        textAlign: 'left'
-                                                      }}>
-                                                        {item.variety}
-                                                      </td>
-                                                      <td style={{
-                                                        padding: '4px 8px',
-                                                        border: 'none',
-                                                        backgroundColor: 'transparent',
-                                                        fontWeight: 'bold',
-                                                        width: '75%',
-                                                        textAlign: 'left',
-                                                        cursor: 'pointer',
-                                                        textDecoration: 'underline',
-                                                        color: '#2563eb'
-                                                      }}
-                                                        onClick={() => {
-                                                          // Navigate to Kunchinittu Ledger page
                                                           console.log('🔗 Opening ledger for kunchinittu:', item.kunchinittu);
                                                           const url = `/ledger?code=${item.kunchinittu}`;
                                                           window.open(url, '_blank');
