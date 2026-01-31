@@ -3,6 +3,8 @@ import styled from 'styled-components';
 import axios from 'axios';
 import { toast } from '../utils/toast';
 import { useAuth } from '../contexts/AuthContext';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -522,185 +524,206 @@ const HamaliBookSimple: React.FC = () => {
       .join(', ');
   };
 
+  // Helper function for PDF - formats location without bags count
+  const formatLocationForPDF = (arrival: any) => {
+    if (!arrival) return 'Unknown Location';
+    
+    const movementType = arrival.movementType;
+    const broker = arrival.broker || 'Unknown Broker';
+    
+    if (movementType === 'purchase') {
+      // Check if it's purchase to outturn (has outturn assigned)
+      if (arrival.outturn && arrival.outturn.code) {
+        return `from ${broker} to Outturn ${arrival.outturn.code}`;
+      } else {
+        // Regular purchase to kunchinittu warehouse
+        const kunchinittu = arrival.toKunchinittu?.name || arrival.toKunchinittu?.code || 'Unknown KN';
+        const warehouse = arrival.toWarehouse?.name || arrival.toWarehouse?.code || 'Unknown Warehouse';
+        return `from ${broker} to ${kunchinittu} ${warehouse}`;
+      }
+    } else if (movementType === 'shifting') {
+      // Shifting: bags from kunchinittu warehouse to kunchinittu warehouse
+      const fromKN = arrival.fromKunchinittu?.name || arrival.fromKunchinittu?.code || 'Unknown KN';
+      const fromWH = arrival.fromWarehouse?.name || arrival.fromWarehouse?.code || 'Unknown Warehouse';
+      const toKN = arrival.toKunchinittu?.name || arrival.toKunchinittu?.code || 'Unknown KN';
+      const toWH = arrival.toWarehouseShift?.name || arrival.toWarehouseShift?.code || arrival.toWarehouse?.name || 'Unknown Warehouse';
+      return `from ${fromKN} ${fromWH} to ${toKN} ${toWH}`;
+    } else if (movementType === 'production-shifting' || movementType === 'production') {
+      // Production shifting: bags from kunchinittu warehouse to outturn number
+      const fromKN = arrival.fromKunchinittu?.name || arrival.fromKunchinittu?.code || 'Unknown KN';
+      const fromWH = arrival.fromWarehouse?.name || arrival.fromWarehouse?.code || 'Unknown Warehouse';
+      const outturn = arrival.outturn?.code || 'Unknown Outturn';
+      return `from ${fromKN} ${fromWH} to Outturn ${outturn}`;
+    }
+    
+    // Fallback for unknown movement types
+    return `from ${broker} to ${arrival.toKunchinittu?.name || 'Unknown Location'}`;
+  };
+
+  const calculateBatchTotals = (summary: HamaliSummary) => {
+    const batchTotals: { [key: string]: number } = {};
+    
+    const processSectionEntries = (entries: any[]) => {
+      entries.forEach((entry: any) => {
+        if (entry.splits && entry.splits.length > 0) {
+          entry.splits.forEach((split: any) => {
+            // Extract batch number from worker name or use batchNumber field
+            let batchNumber = split.batchNumber;
+            if (split.workerName && split.workerName.includes('Batch')) {
+              const match = split.workerName.match(/Batch\s*(\d+)/i);
+              if (match) {
+                batchNumber = parseInt(match[1]);
+              }
+            }
+            
+            const batchKey = `Batch ${batchNumber || 1}`;
+            const amount = parseFloat(split.amount || 0);
+            batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+          });
+        } else {
+          // For entries without splits, assume Batch 1
+          const batchKey = 'Batch 1';
+          const amount = parseFloat(entry.totalAmount || 0);
+          batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+        }
+      });
+    };
+    
+    // Process all paddy hamali sections
+    if (summary.loadingEntries) processSectionEntries(summary.loadingEntries);
+    if (summary.unloadingEntries) processSectionEntries(summary.unloadingEntries);
+    if (summary.looseEntries) processSectionEntries(summary.looseEntries);
+    if (summary.cuttingEntries) processSectionEntries(summary.cuttingEntries);
+    if (summary.plottingEntries) processSectionEntries(summary.plottingEntries);
+    if (summary.shiftingEntries) processSectionEntries(summary.shiftingEntries);
+    if (summary.fillingEntries) processSectionEntries(summary.fillingEntries);
+    
+    // Process other hamali entries
+    if (summary.otherHamaliEntries) {
+      Object.values(summary.otherHamaliEntries).forEach((entry: any) => {
+        if (entry.splits && entry.splits.length > 0) {
+          entry.splits.forEach((split: any) => {
+            // Extract batch number from worker name
+            let batchNumber = split.batchNumber;
+            if (split.workerName && split.workerName.includes('Batch')) {
+              const match = split.workerName.match(/Batch\s*(\d+)/i);
+              if (match) {
+                batchNumber = parseInt(match[1]);
+              }
+            }
+            
+            const batchKey = `Batch ${batchNumber || 1}`;
+            const amount = parseFloat(split.amount || 0);
+            batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+          });
+        } else {
+          // For entries without splits, assume Batch 1
+          const batchKey = 'Batch 1';
+          const amount = parseFloat(entry.totalAmount || 0);
+          batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+        }
+      });
+    }
+    
+    return batchTotals;
+  };
 
 
-  const handleDownloadPDF = () => {
-    // Create a blob with HTML content for PDF generation
-    const htmlContent = generatePDFContent();
-    
-    // Create a temporary link element for download
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${activeTab}-hamali-book-${selectedDate}.html`;
-    
-    // Trigger download
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    // Also trigger print for immediate PDF generation
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
+
+  const handleDownloadPDF = async () => {
+    try {
+      // Check if there's data to generate PDF
+      const hasData = (activeTab === 'paddy' && summary && summary.totalEntries > 0) ||
+                      (activeTab === 'rice' && riceHamaliSummary && riceHamaliSummary.totalEntries > 0);
       
-      // Auto-print after content loads
-      setTimeout(() => {
-        printWindow.print();
-        setTimeout(() => {
-          printWindow.close();
-        }, 1000);
-      }, 500);
+      if (!hasData) {
+        toast.error('No records found for this date. Cannot generate PDF.');
+        return;
+      }
+      
+      // Show loading toast
+      toast.info('Generating PDF...');
+      
+      // Create a temporary container for PDF content
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.position = 'absolute';
+      pdfContainer.style.left = '-9999px';
+      pdfContainer.style.width = '210mm'; // A4 width
+      pdfContainer.style.padding = '20mm';
+      pdfContainer.style.backgroundColor = 'white';
+      pdfContainer.style.fontFamily = 'Arial, sans-serif';
+      pdfContainer.style.fontSize = '12px';
+      pdfContainer.style.color = '#000';
+      
+      // Generate PDF content HTML
+      const contentHTML = generatePDFContentHTML();
+      pdfContainer.innerHTML = contentHTML;
+      
+      // Append to body temporarily
+      document.body.appendChild(pdfContainer);
+      
+      // Wait a bit for rendering
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Convert to canvas
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      // Remove temporary container
+      document.body.removeChild(pdfContainer);
+      
+      // Create PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+      
+      // Add additional pages if content is longer than one page
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+      
+      // Download PDF
+      const filename = `${activeTab}-hamali-book-${selectedDate}.pdf`;
+      pdf.save(filename);
+      
+      toast.success('PDF downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     }
   };
 
-  const generatePDFContent = () => {
-    const printStyles = `
-      <style>
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 20mm;
-          }
-          
-          body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            line-height: 1.4;
-            color: #000;
-            background: white !important;
-          }
-          
-          .print-container {
-            width: 100%;
-            max-width: none;
-            margin: 0;
-            padding: 0;
-            background: white !important;
-          }
-          
-          .print-header {
-            text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-          }
-          
-          .print-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 0;
-          }
-          
-          .print-date {
-            font-size: 14px;
-            margin: 5px 0 0 0;
-          }
-          
-          .print-section {
-            margin-bottom: 15px;
-            page-break-inside: avoid;
-          }
-          
-          .print-section-title {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #000;
-            padding-bottom: 2px;
-          }
-          
-          .print-entry {
-            display: table;
-            width: 100%;
-            padding: 4px 0;
-            border-bottom: 1px solid #ddd;
-            font-size: 11px;
-            page-break-inside: avoid;
-          }
-          
-          .print-entry > div {
-            display: table-cell;
-            vertical-align: top;
-            padding: 2px 5px;
-          }
-          
-          .print-amount {
-            font-weight: bold;
-            width: 80px;
-            text-align: left;
-          }
-          
-          .print-details {
-            width: auto;
-            padding-left: 10px;
-            padding-right: 10px;
-          }
-          
-          .print-variety-info {
-            font-size: 10px;
-            color: #666;
-            margin-top: 2px;
-          }
-          
-          .print-splits {
-            width: 250px;
-            text-align: right;
-            font-size: 10px;
-            color: #666;
-          }
-          
-          .print-total {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 2px solid #000;
-            font-size: 14px;
-            font-weight: bold;
-            display: table;
-            width: 100%;
-          }
-          
-          .print-total > div {
-            display: table-cell;
-            vertical-align: top;
-            padding: 2px 5px;
-          }
-          
-          .print-batch-totals {
-            font-size: 11px;
-            color: #666;
-            margin-top: 5px;
-          }
-        }
-        
-        @media screen {
-          body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            line-height: 1.4;
-            color: #000;
-            background: white;
-            margin: 20px;
-          }
-        }
-      </style>
-    `;
-    
-    // Create print content
+  const generatePDFContentHTML = () => {
     let contentHTML = `
-      <div class="print-container">
-        <div class="print-header">
-          <h1 class="print-title">${activeTab === 'paddy' ? 'Paddy Hamali' : 'Rice Hamali'} Book Summary - RATE FIX APPLIED</h1>
-          <div class="print-date">${formatDate(selectedDate)}</div>
+      <div style="width: 100%; max-width: 100%;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+          <h1 style="font-size: 18px; font-weight: bold; margin: 0;">
+            🔥 ${activeTab === 'paddy' ? 'Paddy Hamali' : 'Rice Hamali'} Book Summary - RATE FIX APPLIED 🔥
+          </h1>
+          <div style="font-size: 14px; margin: 5px 0 0 0;">${formatDate(selectedDate)}</div>
         </div>
     `;
     
-    // PADDY HAMALI PDF
+    // PADDY HAMALI CONTENT
     if (activeTab === 'paddy' && summary) {
-      // Add paddy hamali sections
       const paddySections = [
         { entries: summary.loadingEntries, title: 'Paddy Loading' },
         { entries: summary.unloadingEntries, title: 'Paddy Unloading' },
@@ -714,16 +737,18 @@ const HamaliBookSimple: React.FC = () => {
       paddySections.forEach(({ entries, title }) => {
         if (entries && entries.length > 0) {
           contentHTML += `
-            <div class="print-section">
-              <div class="print-section-title">${title}:</div>
+            <div style="margin-bottom: 15px;">
+              <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #000; padding-bottom: 2px;">
+                ${title}:
+              </div>
           `;
           
           entries.forEach((entry: any) => {
             contentHTML += `
-              <div class="print-entry">
-                <div class="print-amount">₹${entry.totalAmount.toFixed(0)}</div>
-                <div class="print-details">${entry.totalBags} Bags from ${formatLocationDisplay(entry.arrival)}</div>
-                <div class="print-splits">${formatSplitsInfo(entry.splits)}</div>
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
+                <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
+                <div style="flex: 1; padding: 0 10px;">${entry.totalBags} Bags ${formatLocationForPDF(entry.arrival)}</div>
+                <div style="width: 250px; text-align: right; font-size: 10px; color: #666;">${formatSplitsInfo(entry.splits)}</div>
               </div>
             `;
           });
@@ -732,20 +757,21 @@ const HamaliBookSimple: React.FC = () => {
         }
       });
       
-      // Add other hamali works
       if (summary.otherHamaliEntries && Object.keys(summary.otherHamaliEntries).length > 0) {
         contentHTML += `
-          <div class="print-section">
-            <div class="print-section-title">Other Hamali Works:</div>
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #000; padding-bottom: 2px;">
+              Other Hamali Works:
+            </div>
         `;
         
         Object.entries(summary.otherHamaliEntries).forEach(([key, entry]: [string, any]) => {
           const description = entry.description ? ` - ${entry.description}` : '';
           contentHTML += `
-            <div class="print-entry">
-              <div class="print-amount">₹${entry.totalAmount.toFixed(0)}</div>
-              <div class="print-details">${entry.totalBags} Bags - ${entry.workType} (${entry.workDetail})${description}</div>
-              <div class="print-splits">${formatSplitsInfo(entry.splits)}</div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
+              <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
+              <div style="flex: 1; padding: 0 10px;">${entry.totalBags} Bags - ${entry.workType} (${entry.workDetail})${description}</div>
+              <div style="width: 250px; text-align: right; font-size: 10px; color: #666;">${formatSplitsInfo(entry.splits)}</div>
             </div>
           `;
         });
@@ -753,25 +779,36 @@ const HamaliBookSimple: React.FC = () => {
         contentHTML += `</div>`;
       }
       
-      // Add total
+      // Calculate batch totals for paddy hamali
+      const batchTotals = calculateBatchTotals(summary);
+      const batchTotalsText = Object.entries(batchTotals)
+        .map(([batch, total]) => `${batch}: ₹${(total as number).toFixed(0)}`)
+        .join(', ');
+      
       contentHTML += `
-        <div class="print-total">
-          <div class="print-amount">₹${summary.grandTotal.toFixed(0)}</div>
-          <div class="print-details">Total</div>
-          <div class="print-splits"></div>
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 2px solid #000; font-size: 14px; font-weight: bold;">
+          <div style="display: flex; justify-content: space-between;">
+            <div style="width: 80px;">₹${summary.grandTotal.toFixed(0)}</div>
+            <div style="flex: 1; padding: 0 10px;">
+              Total
+              ${batchTotalsText ? `<div style="font-size: 11px; color: #666; margin-top: 5px;">${batchTotalsText}, Total: ₹${summary.grandTotal.toFixed(0)}</div>` : ''}
+            </div>
+            <div style="width: 250px;"></div>
+          </div>
         </div>
       `;
     }
     
-    // RICE HAMALI PDF
+    // RICE HAMALI CONTENT
     if (activeTab === 'rice' && riceHamaliSummary) {
-      // Add rice hamali sections - grouped by work type
       if (riceHamaliSummary.riceHamaliEntries && Object.keys(riceHamaliSummary.riceHamaliEntries).length > 0) {
         Object.entries(riceHamaliSummary.riceHamaliEntries).forEach(([workType, entries]: [string, any]) => {
           if (entries && entries.length > 0) {
             contentHTML += `
-              <div class="print-section">
-                <div class="print-section-title">${workType}:</div>
+              <div style="margin-bottom: 15px;">
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #000; padding-bottom: 2px;">
+                  ${workType}:
+                </div>
             `;
             
             entries.forEach((entry: any) => {
@@ -779,13 +816,13 @@ const HamaliBookSimple: React.FC = () => {
               const varietyInfo = `Variety: ${entry.variety} | Location: ${entry.location}${entry.billNumber ? ` | Bill: ${entry.billNumber}` : ''}${entry.lorryNumber ? ` | Lorry: ${entry.lorryNumber}` : ''}${entry.productType ? ` | Type: ${entry.productType}` : ''}`;
               
               contentHTML += `
-                <div class="print-entry">
-                  <div class="print-amount">₹${entry.totalAmount.toFixed(0)}</div>
-                  <div class="print-details">
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
+                  <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
+                  <div style="flex: 1; padding: 0 10px;">
                     ${entry.bags} Bags - ${entry.workDetail}
-                    <div class="print-variety-info">${varietyInfo}</div>
+                    <div style="font-size: 10px; color: #666; margin-top: 2px;">${varietyInfo}</div>
                   </div>
-                  <div class="print-splits">
+                  <div style="width: 250px; text-align: right; font-size: 10px; color: #666;">
                     Batch ${entry.batchNumber || 1}: 🎯 ${entry.workerName}: ${entry.bags} bags × ₹${rate.toFixed(2)} = ₹${entry.totalAmount.toFixed(0)} 🎯
                   </div>
                 </div>
@@ -797,11 +834,12 @@ const HamaliBookSimple: React.FC = () => {
         });
       }
       
-      // Add other rice hamali works
       if (riceHamaliSummary.otherHamaliEntries && Object.keys(riceHamaliSummary.otherHamaliEntries).length > 0) {
         contentHTML += `
-          <div class="print-section">
-            <div class="print-section-title">Other Rice Work:</div>
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #000; padding-bottom: 2px;">
+              Other Rice Work:
+            </div>
         `;
         
         Object.entries(riceHamaliSummary.otherHamaliEntries).forEach(([workType, entries]: [string, any]) => {
@@ -810,13 +848,13 @@ const HamaliBookSimple: React.FC = () => {
             const varietyInfo = `Variety: ${entry.variety} | Location: ${entry.location}`;
             
             contentHTML += `
-              <div class="print-entry">
-                <div class="print-amount">₹${entry.totalAmount.toFixed(0)}</div>
-                <div class="print-details">
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
+                <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
+                <div style="flex: 1; padding: 0 10px;">
                   ${entry.bags} Bags - ${entry.workDetail}
-                  <div class="print-variety-info">${varietyInfo}</div>
+                  <div style="font-size: 10px; color: #666; margin-top: 2px;">${varietyInfo}</div>
                 </div>
-                <div class="print-splits">
+                <div style="width: 250px; text-align: right; font-size: 10px; color: #666;">
                   Batch ${entry.batchNumber || 1}: 🎯 ${entry.workerName}: ${entry.bags} bags × ₹${rate.toFixed(2)} = ₹${entry.totalAmount.toFixed(0)} 🎯
                 </div>
               </div>
@@ -827,40 +865,27 @@ const HamaliBookSimple: React.FC = () => {
         contentHTML += `</div>`;
       }
       
-      // Calculate batch totals for rice hamali
       const batchTotals = calculateRiceBatchTotals(riceHamaliSummary);
       const batchTotalsText = Object.entries(batchTotals)
         .map(([batch, total]) => `${batch}: ₹${total.toFixed(0)}`)
         .join(', ');
       
-      // Add total
       contentHTML += `
-        <div class="print-total">
-          <div class="print-amount">₹${riceHamaliSummary.grandTotal.toFixed(0)}</div>
-          <div class="print-details">
-            Total
-            ${batchTotalsText ? `<div class="print-batch-totals">${batchTotalsText}, Total: ₹${riceHamaliSummary.grandTotal.toFixed(0)}</div>` : ''}
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 2px solid #000; font-size: 14px; font-weight: bold;">
+          <div style="display: flex; justify-content: space-between;">
+            <div style="width: 80px;">₹${riceHamaliSummary.grandTotal.toFixed(0)}</div>
+            <div style="flex: 1; padding: 0 10px;">
+              Total
+              ${batchTotalsText ? `<div style="font-size: 11px; color: #666; margin-top: 5px;">${batchTotalsText}, Total: ₹${riceHamaliSummary.grandTotal.toFixed(0)}</div>` : ''}
+            </div>
+            <div style="width: 250px;"></div>
           </div>
-          <div class="print-splits"></div>
         </div>
       `;
     }
     
     contentHTML += `</div>`;
-    
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${activeTab === 'paddy' ? 'Paddy' : 'Rice'} Hamali Book Summary - ${formatDate(selectedDate)}</title>
-        <meta charset="UTF-8">
-        ${printStyles}
-      </head>
-      <body>
-        ${contentHTML}
-      </body>
-      </html>
-    `;
+    return contentHTML;
   };
 
   const renderPaddySection = (entries: any[], title: string) => {
@@ -916,70 +941,6 @@ const HamaliBookSimple: React.FC = () => {
         ))}
       </Section>
     );
-  };
-
-  const calculateBatchTotals = (summary: HamaliSummary) => {
-    const batchTotals: { [key: string]: number } = {};
-    
-    // Helper function to process entries and accumulate batch totals
-    const processSectionEntries = (entries: any[]) => {
-      entries.forEach((entry: any) => {
-        if (entry.splits && entry.splits.length > 0) {
-          entry.splits.forEach((split: any) => {
-            // Extract batch number from worker name (e.g., "Batch 1" -> 1, "Batch 2" -> 2)
-            let batchNumber = split.batchNumber;
-            if (split.workerName && split.workerName.includes('Batch')) {
-              const match = split.workerName.match(/Batch\s*(\d+)/i);
-              if (match) {
-                batchNumber = parseInt(match[1]);
-              }
-            }
-            
-            const batchKey = `Batch ${batchNumber || 1}`;
-            const amount = parseFloat(split.amount || 0);
-            batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
-          });
-        }
-      });
-    };
-    
-    // Process all paddy hamali sections
-    if (summary.loadingEntries) processSectionEntries(summary.loadingEntries);
-    if (summary.unloadingEntries) processSectionEntries(summary.unloadingEntries);
-    if (summary.looseEntries) processSectionEntries(summary.looseEntries);
-    if (summary.cuttingEntries) processSectionEntries(summary.cuttingEntries);
-    if (summary.plottingEntries) processSectionEntries(summary.plottingEntries);
-    if (summary.shiftingEntries) processSectionEntries(summary.shiftingEntries);
-    if (summary.fillingEntries) processSectionEntries(summary.fillingEntries);
-    
-    // Process other hamali entries
-    if (summary.otherHamaliEntries) {
-      Object.values(summary.otherHamaliEntries).forEach((entry: any) => {
-        if (entry.splits && entry.splits.length > 0) {
-          entry.splits.forEach((split: any) => {
-            // Extract batch number from worker name
-            let batchNumber = split.batchNumber;
-            if (split.workerName && split.workerName.includes('Batch')) {
-              const match = split.workerName.match(/Batch\s*(\d+)/i);
-              if (match) {
-                batchNumber = parseInt(match[1]);
-              }
-            }
-            
-            const batchKey = `Batch ${batchNumber || 1}`;
-            const amount = parseFloat(split.amount || 0);
-            batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
-          });
-        } else {
-          // For entries without splits, assume Batch 1
-          const batchKey = 'Batch 1';
-          const amount = parseFloat(entry.totalAmount || 0);
-          batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
-        }
-      });
-    }
-    
-    return batchTotals;
   };
 
   const calculateRiceBatchTotals = (riceHamaliSummary: any) => {
