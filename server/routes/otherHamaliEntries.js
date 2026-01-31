@@ -325,11 +325,13 @@ router.post('/bulk', auth, async (req, res) => {
             rice_stock_movement_id,
             entry_type,
             rice_hamali_rate_id, 
-            bags, 
+            bags,
+            rate,
+            amount,
             remarks,
             is_active,
             created_by
-          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :remarks, true, :createdBy)
+          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :rate, :amount, :remarks, true, :createdBy)
           RETURNING *
         `, {
           replacements: {
@@ -338,6 +340,8 @@ router.post('/bulk', auth, async (req, res) => {
             entryType: isStockMovement ? movementType : 'production',
             riceHamaliRateId,
             bags,
+            rate: parseFloat(rate),
+            amount: parseFloat(rate) * parseInt(bags),
             remarks: `Other Hamali: ${description || ''}, ${workerName ? `Worker: ${workerName}, ` : ''}${batchNumber ? `Batch: ${batchNumber}, ` : ''}Rate: ₹${rate}`,
             createdBy: req.user.userId
           }
