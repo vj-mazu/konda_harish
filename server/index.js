@@ -968,6 +968,14 @@ const startServer = async () => {
         console.log('⚠️ Migration 66 warning:', error.message);
       }
 
+      // Migration 67: Final performance indexes (schema-verified)
+      try {
+        const finalPerformanceIndexes = require('./migrations/67_final_performance_indexes_verified');
+        await finalPerformanceIndexes.up(sequelize.getQueryInterface());
+      } catch (error) {
+        console.log('⚠️ Migration 67 warning:', error.message);
+      }
+
       // Auto-fix: RJ Broken and Rejection Rice product types
       try {
         console.log('🔄 Auto-fixing product types (RJ Broken, Rejection Rice)...');
