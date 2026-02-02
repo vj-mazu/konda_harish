@@ -1670,8 +1670,8 @@ router.get('/pending-list', auth, authorize('manager', 'admin'), async (req, res
       role: req.user.role
     };
 
-    // Cache for 15 seconds (much shorter than the 30 second refresh)
-    await cacheService.set(cacheKey, responseData, 15);
+    // Cache for 45 seconds (ultra-fast subsequent requests, still fresh enough for approvals)
+    await cacheService.set(cacheKey, responseData, 45);
 
     res.json(responseData);
   } catch (error) {

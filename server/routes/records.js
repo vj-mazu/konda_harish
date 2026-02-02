@@ -13,6 +13,7 @@ const router = express.Router();
 
 // Get day-wise arrivals with month-wise pagination
 router.get('/arrivals', auth, async (req, res) => {
+  const startTime = Date.now();
   try {
     const {
       month, // Format: YYYY-MM
@@ -24,6 +25,21 @@ router.get('/arrivals', auth, async (req, res) => {
       limit,
       showAll // NEW: When true, bypass 30-day limit for stock tab
     } = req.query;
+
+    // PERFORMANCE: Create cache key from all query params  
+    const cacheKey = `records_arrivals:${month || ''}:${dateFrom || ''}:${dateTo || ''}:${status || ''}:${movementType || ''}:${outturnId || ''}:${limit || ''}:${showAll || ''}:${req.user.role}`;
+
+    // Try cache first (60 second TTL for performance)
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      const responseTime = Date.now() - startTime;
+      console.log(`⚡ Arrivals cache HIT: ${responseTime}ms`);
+      return res.json({
+        ...cachedData,
+        performance: { responseTime: `${responseTime}ms`, cached: true }
+      });
+    }
+
 
     const where = {};
 
@@ -153,9 +169,10 @@ router.get('/arrivals', auth, async (req, res) => {
 
     const availableMonths = monthsQuery[0];
 
-    console.log(`✅ Arrivals query completed: ${rows.length} records returned`);
+    const responseTime = Date.now() - startTime;
+    console.log(`✅ Arrivals query completed in ${responseTime}ms: ${rows.length} records returned`);
 
-    res.json({
+    const responseData = {
       records: groupedByDate,
       pagination: {
         currentMonth: month || null,
@@ -164,6 +181,14 @@ router.get('/arrivals', auth, async (req, res) => {
         limit: limitNum,
         truncated: rows.length === limitNum
       }
+    };
+
+    // Cache for 60 seconds (ultra-fast subsequent requests)
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json({
+      ...responseData,
+      performance: { responseTime: `${responseTime}ms`, cached: false }
     });
   } catch (error) {
     console.error('Get arrivals records error:', error);
@@ -188,6 +213,7 @@ router.get('/arrivals', auth, async (req, res) => {
 
 // Get purchase records with month-wise pagination
 router.get('/purchase', auth, async (req, res) => {
+  const startTime = Date.now();
   try {
     const {
       month, // Format: YYYY-MM
@@ -197,6 +223,20 @@ router.get('/purchase', auth, async (req, res) => {
       limit,
       search
     } = req.query;
+
+    // PERFORMANCE: Create cache key from all query params
+    const cacheKey = `records_purchase:${month || ''}:${dateFrom || ''}:${dateTo || ''}:${page || '1'}:${limit || ''}:${search || ''}`;
+
+    // Try cache first (60 second TTL for performance)
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      const responseTime = Date.now() - startTime;
+      console.log(`⚡ Purchase cache HIT: ${responseTime}ms`);
+      return res.json({
+        ...cachedData,
+        performance: { responseTime: `${responseTime}ms`, cached: true }
+      });
+    }
 
     const where = {
       movementType: 'purchase',
@@ -291,9 +331,10 @@ router.get('/purchase', auth, async (req, res) => {
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    console.log(`✅ Purchase query completed: ${rows.length} records returned`);
+    const responseTime = Date.now() - startTime;
+    console.log(`✅ Purchase query completed in ${responseTime}ms: ${rows.length} records returned`);
 
-    res.json({
+    const responseData = {
       records: groupedByDate,
       pagination: {
         currentMonth: month || null,
@@ -307,6 +348,14 @@ router.get('/purchase', auth, async (req, res) => {
         hasPrevPage: pageNum > 1,
         truncated: false
       }
+    };
+
+    // Cache for 60 seconds (ultra-fast subsequent requests)
+    await cacheService.set(cacheKey, responseData, 60);
+
+    res.json({
+      ...responseData,
+      performance: { responseTime: `${responseTime}ms`, cached: false }
     });
   } catch (error) {
     console.error('Get purchase records error:', error);

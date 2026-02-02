@@ -81,7 +81,7 @@ router.post('/batch', auth, async (req, res) => {
 
     // SAFE CACHE SET (won't crash on error)
     try {
-      await cacheService.set(cacheKey, entries, 30); // 30 second cache
+      await cacheService.set(cacheKey, entries, 60); // 60 second cache for performance
     } catch (cacheError) {
       console.warn('Hamali batch cache write failed (safe):', cacheError.message);
     }
