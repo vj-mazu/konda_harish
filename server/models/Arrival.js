@@ -24,7 +24,7 @@ const Arrival = sequelize.define('Arrival', {
     type: DataTypes.ENUM('purchase', 'shifting', 'production-shifting', 'for-production', 'loose'),
     allowNull: false
   },
-  
+
   // Purchase fields
   broker: {
     type: DataTypes.STRING(100),
@@ -42,7 +42,7 @@ const Arrival = sequelize.define('Arrival', {
     type: DataTypes.STRING(100),
     allowNull: true // User-entered text for purchase
   },
-  
+
   // Purchase destination (chain-linked)
   toKunchinintuId: {
     type: DataTypes.INTEGER,
@@ -60,7 +60,7 @@ const Arrival = sequelize.define('Arrival', {
       key: 'id'
     }
   },
-  
+
   // Shifting fields
   fromKunchinintuId: {
     type: DataTypes.INTEGER,
@@ -86,7 +86,7 @@ const Arrival = sequelize.define('Arrival', {
       key: 'id'
     }
   },
-  
+
   // Production shifting field
   outturnId: {
     type: DataTypes.INTEGER,
@@ -96,7 +96,7 @@ const Arrival = sequelize.define('Arrival', {
       key: 'id'
     }
   },
-  
+
   // Purchase from outturn field (for direct production to kunchinittu)
   fromOutturnId: {
     type: DataTypes.INTEGER,
@@ -106,7 +106,7 @@ const Arrival = sequelize.define('Arrival', {
       key: 'id'
     }
   },
-  
+
   // Linked production shifting ID (for tracking which production shifting this stock came from)
   linkedShiftingId: {
     type: DataTypes.INTEGER,
@@ -116,7 +116,7 @@ const Arrival = sequelize.define('Arrival', {
       key: 'id'
     }
   },
-  
+
   // Common fields
   moisture: {
     type: DataTypes.DECIMAL(5, 2),
@@ -152,7 +152,7 @@ const Arrival = sequelize.define('Arrival', {
   //   field: 'snapshot_rate',
   //   comment: 'Snapshot of kunchinittu average rate at time of production-shifting entry'
   // },
-  
+
   // System fields
   status: {
     type: DataTypes.ENUM('pending', 'approved', 'rejected', 'deleted', 'admin-approved'),
@@ -224,39 +224,39 @@ const Arrival = sequelize.define('Arrival', {
     { fields: ['outturnId'], name: 'idx_arrivals_outturn_id' },
     { fields: ['linkedShiftingId'], name: 'idx_arrivals_linked_shifting_id' },
     { fields: ['createdAt'], name: 'idx_arrivals_created_at' },
-    
+
     // Foreign key indexes for joins
     { fields: ['toKunchinintuId'], name: 'idx_arrivals_to_kunchinittu' },
     { fields: ['toWarehouseId'], name: 'idx_arrivals_to_warehouse' },
     { fields: ['fromKunchinintuId'], name: 'idx_arrivals_from_kunchinittu' },
     { fields: ['fromWarehouseId'], name: 'idx_arrivals_from_warehouse' },
     { fields: ['toWarehouseShiftId'], name: 'idx_arrivals_to_warehouse_shift' },
-    
+
     // Composite indexes for common query patterns
     { fields: ['date', 'movementType'], name: 'idx_arrivals_date_movement' },
     { fields: ['date', 'status'], name: 'idx_arrivals_date_status' },
     { fields: ['status', 'movementType'], name: 'idx_arrivals_status_movement' },
     { fields: ['status', 'date'], name: 'idx_arrivals_status_date' },
     { fields: ['movementType', 'date'], name: 'idx_arrivals_movement_date' },
-    
+
     // Paddy stock queries (approved + admin approved)
     { fields: ['status', 'adminApprovedBy'], name: 'idx_arrivals_status_admin' },
     { fields: ['status', 'adminApprovedBy', 'date'], name: 'idx_arrivals_stock_query' },
-    
+
     // Production shifting queries
     { fields: ['movementType', 'outturnId'], name: 'idx_arrivals_movement_outturn' },
     { fields: ['movementType', 'outturnId', 'date'], name: 'idx_arrivals_production_query' },
-    
+
     // Kunchinittu ledger queries
     { fields: ['toKunchinintuId', 'status', 'date'], name: 'idx_arrivals_to_kunchinittu_ledger' },
     { fields: ['fromKunchinintuId', 'status', 'date'], name: 'idx_arrivals_from_kunchinittu_ledger' },
     { fields: ['toKunchinintuId', 'movementType', 'status'], name: 'idx_arrivals_to_kunchinittu_type' },
     { fields: ['fromKunchinintuId', 'movementType', 'status'], name: 'idx_arrivals_from_kunchinittu_type' },
-    
+
     // Variety-based queries
     { fields: ['variety', 'date'], name: 'idx_arrivals_variety_date' },
     { fields: ['variety', 'movementType'], name: 'idx_arrivals_variety_movement' },
-    
+
     // User activity queries
     { fields: ['createdBy', 'date'], name: 'idx_arrivals_created_by_date' },
     { fields: ['createdBy', 'status'], name: 'idx_arrivals_created_by_status' }

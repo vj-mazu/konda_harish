@@ -127,16 +127,44 @@ router.get('/kunchinittu/:id', auth, async (req, res) => {
       netWeight: inwardTotal.netWeight - outwardTotal.netWeight
     };
 
-    // Automatically calculate average rate when viewing ledger
+    // 📊 Calculate average rate directly from loaded purchase records
+    let calculatedAverageRate = 0;
     try {
-      const { calculateKunchinintuAverageRate } = require('./purchase-rates');
-      await calculateKunchinintuAverageRate(id);
+      // Filter inward transactions that have purchase rates
+      const purchaseRecordsWithRates = inward.filter(t =>
+        t.movementType === 'purchase' &&
+        t.purchaseRate &&
+        t.purchaseRate.totalAmount &&
+        t.netWeight
+      );
 
-      // Refresh kunchinittu data to get updated average rate
-      await kunchinittu.reload();
+      console.log(`🔍 Found ${purchaseRecordsWithRates.length} purchase records with rates for kunchinittu ${id}`);
+
+      if (purchaseRecordsWithRates.length > 0) {
+        // Calculate weighted average: sum(totalAmount) / sum(netWeight) * 75
+        const totalAmount = purchaseRecordsWithRates.reduce((sum, t) =>
+          sum + parseFloat(t.purchaseRate.totalAmount), 0
+        );
+        const totalWeight = purchaseRecordsWithRates.reduce((sum, t) =>
+          sum + parseFloat(t.netWeight), 0
+        );
+
+        if (totalWeight > 0) {
+          calculatedAverageRate = (totalAmount / totalWeight) * 75;
+          console.log(`✅ Calculated average rate for kunchinittu ${id}: ₹${calculatedAverageRate.toFixed(2)}/Q (${purchaseRecordsWithRates.length} records, ${totalWeight}kg total)`);
+
+          // 💾 SAVE to database so production-shifting can read it
+          await kunchinittu.update({
+            averageRate: parseFloat(calculatedAverageRate.toFixed(2)),
+            lastRateCalculation: new Date()
+          });
+          console.log(`💾 Saved average rate to database: ₹${calculatedAverageRate.toFixed(2)}/Q`);
+        }
+      } else {
+        console.log(`⚠️ No purchase records with rates found for kunchinittu ${id}`);
+      }
     } catch (error) {
-      console.error('Error auto-calculating average rate:', error);
-      // Don't fail the main operation
+      console.error('Error calculating average rate:', error);
     }
 
     res.json({
@@ -146,8 +174,8 @@ router.get('/kunchinittu/:id', auth, async (req, res) => {
         code: kunchinittu.code,
         warehouse: kunchinittu.warehouse,
         variety: kunchinittu.variety,
-        averageRate: kunchinittu.averageRate,
-        lastRateCalculation: kunchinittu.lastRateCalculation,
+        averageRate: parseFloat(calculatedAverageRate.toFixed(2)), // Use calculated rate
+        lastRateCalculation: new Date(), // Update timestamp
         isClosed: kunchinittu.isClosed || false,
         closedAt: kunchinittu.closedAt,
         closedBy: kunchinittu.closedBy

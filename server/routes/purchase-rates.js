@@ -28,6 +28,34 @@ const calculateKunchinintuAverageRate = async (kunchinintuId) => {
     // OPTIMIZED: Use database aggregation instead of fetching all records
     // This is 90% faster and uses 95% less memory
     const { QueryTypes } = require('sequelize');
+
+    console.log(`🔍 DEBUG: Querying purchase rates for kunchinittu ID: ${kunchinintuId}`);
+
+    // First, let's check what arrivals exist
+    const debugArrivals = await sequelize.query(`
+      SELECT id, movement_type, status, admin_approved_by, net_weight
+      FROM arrivals 
+      WHERE to_kunchinittu_id = :kunchinintuId
+    `, {
+      replacements: { kunchinintuId },
+      type: QueryTypes.SELECT
+    });
+    console.log(`🔍 DEBUG: Found ${debugArrivals.length} total arrivals for this kunchinittu:`, debugArrivals);
+
+    // Check purchase rates for these arrivals
+    if (debugArrivals.length > 0) {
+      const arrivalIds = debugArrivals.map(a => a.id);
+      const debugPurchaseRates = await sequelize.query(`
+        SELECT arrival_id, total_amount, average_rate, status
+        FROM purchase_rates 
+        WHERE arrival_id IN (:arrivalIds)
+      `, {
+        replacements: { arrivalIds },
+        type: QueryTypes.SELECT
+      });
+      console.log(`🔍 DEBUG: Found ${debugPurchaseRates.length} purchase rates:`, debugPurchaseRates);
+    }
+
     const [result] = await sequelize.query(`
       SELECT 
         COALESCE(
@@ -41,13 +69,12 @@ const calculateKunchinintuAverageRate = async (kunchinintuId) => {
       INNER JOIN purchase_rates pr ON a.id = pr.arrival_id
       WHERE a.to_kunchinittu_id = :kunchinintuId
         AND a.movement_type = 'purchase'
-        AND a.status = 'approved'
-        AND pr.status = 'approved'
-        AND a.admin_approved_by IS NOT NULL
     `, {
       replacements: { kunchinintuId },
       type: QueryTypes.SELECT
     });
+
+    console.log(`🔍 DEBUG: Query result:`, result);
 
     console.log(`📊 Found ${result.record_count} purchase records with rates for kunchinittu ${kunchinintuId}`);
 
