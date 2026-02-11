@@ -169,35 +169,35 @@ router.post('/', auth, async (req, res) => {
         // PERFECT CHAIN VALIDATION: Variety → Kunchinittu → Warehouse
         // ═══════════════════════════════════════════════════════════════════════
 
-        // STEP 1: Get Kunchinittu with its allotted variety and warehouse
-        const kunchinittu = await Kunchinittu.findByPk(toKunchinintuId, {
-          attributes: ['id', 'name', 'code', 'varietyId', 'warehouseId'],
-          include: [
-            {
-              model: Variety,
-              as: 'variety',
-              attributes: ['id', 'name'],
-              required: false
-            },
-            {
-              model: Warehouse,
-              as: 'warehouse',
-              attributes: ['id', 'name', 'code'],
-              required: false
-            }
-          ]
-        });
+        // STEP 1 & 2: Get Kunchinittu and Warehouse in parallel (PERFORMANCE OPTIMIZATION)
+        const [kunchinittu, selectedWarehouse] = await Promise.all([
+          Kunchinittu.findByPk(toKunchinintuId, {
+            attributes: ['id', 'name', 'code', 'varietyId', 'warehouseId'],
+            include: [
+              {
+                model: Variety,
+                as: 'variety',
+                attributes: ['id', 'name'],
+                required: false
+              },
+              {
+                model: Warehouse,
+                as: 'warehouse',
+                attributes: ['id', 'name', 'code'],
+                required: false
+              }
+            ]
+          }),
+          Warehouse.findByPk(toWarehouseId, {
+            attributes: ['id', 'name', 'code']
+          })
+        ]);
 
         if (!kunchinittu) {
           return res.status(400).json({
             error: '❌ Invalid Kunchinittu selected'
           });
         }
-
-        // STEP 2: Validate Warehouse belongs to Kunchinittu
-        const selectedWarehouse = await Warehouse.findByPk(toWarehouseId, {
-          attributes: ['id', 'name', 'code']
-        });
 
         if (!selectedWarehouse) {
           return res.status(400).json({
@@ -301,12 +301,14 @@ router.post('/', auth, async (req, res) => {
       });
 
       if (!sourceStock) {
-        const fromKunchinittu = await Kunchinittu.findByPk(fromKunchinintuId, {
-          attributes: ['name', 'code']
-        });
-        const fromWarehouse = await Warehouse.findByPk(fromWarehouseId, {
-          attributes: ['name', 'code']
-        });
+        const [fromKunchinittu, fromWarehouse] = await Promise.all([
+          Kunchinittu.findByPk(fromKunchinintuId, {
+            attributes: ['name', 'code']
+          }),
+          Warehouse.findByPk(fromWarehouseId, {
+            attributes: ['name', 'code']
+          })
+        ]);
 
         return res.status(400).json({
           error: `❌ SOURCE STOCK NOT FOUND\n\n` +
@@ -320,49 +322,52 @@ router.post('/', auth, async (req, res) => {
 
       console.log(`✅ Source validation passed: ${normalizedVariety} exists in source`);
 
-      // STEP 1.5: Check if source has sufficient stock quantity
-      const sourceStockTotal = await Arrival.sum('bags', {
-        where: {
-          [Op.or]: [
-            { toKunchinintuId: fromKunchinintuId, toWarehouseId: fromWarehouseId },
-            { toKunchinintuId: fromKunchinintuId, toWarehouseShiftId: fromWarehouseId }
-          ],
-          status: 'approved',
-          adminApprovedBy: { [Op.not]: null },
-          [Op.and]: [
-            sequelize.where(
-              sequelize.fn('UPPER', sequelize.fn('TRIM', sequelize.col('variety'))),
-              normalizedVariety
-            )
-          ]
-        }
-      });
-
-      const sourceStockOut = await Arrival.sum('bags', {
-        where: {
-          fromKunchinintuId,
-          fromWarehouseId,
-          status: 'approved',
-          adminApprovedBy: { [Op.not]: null },
-          movementType: { [Op.in]: ['shifting', 'production-shifting'] },
-          [Op.and]: [
-            sequelize.where(
-              sequelize.fn('UPPER', sequelize.fn('TRIM', sequelize.col('variety'))),
-              normalizedVariety
-            )
-          ]
-        }
-      });
+      // STEP 1.5: Check if source has sufficient stock quantity (PARALLEL QUERIES)
+      const [sourceStockTotal, sourceStockOut] = await Promise.all([
+        Arrival.sum('bags', {
+          where: {
+            [Op.or]: [
+              { toKunchinintuId: fromKunchinintuId, toWarehouseId: fromWarehouseId },
+              { toKunchinintuId: fromKunchinintuId, toWarehouseShiftId: fromWarehouseId }
+            ],
+            status: 'approved',
+            adminApprovedBy: { [Op.not]: null },
+            [Op.and]: [
+              sequelize.where(
+                sequelize.fn('UPPER', sequelize.fn('TRIM', sequelize.col('variety'))),
+                normalizedVariety
+              )
+            ]
+          }
+        }),
+        Arrival.sum('bags', {
+          where: {
+            fromKunchinintuId,
+            fromWarehouseId,
+            status: 'approved',
+            adminApprovedBy: { [Op.not]: null },
+            movementType: { [Op.in]: ['shifting', 'production-shifting'] },
+            [Op.and]: [
+              sequelize.where(
+                sequelize.fn('UPPER', sequelize.fn('TRIM', sequelize.col('variety'))),
+                normalizedVariety
+              )
+            ]
+          }
+        })
+      ]);
 
       const availableStock = (sourceStockTotal || 0) - (sourceStockOut || 0);
 
       if (availableStock < bags) {
-        const fromKunchinittu = await Kunchinittu.findByPk(fromKunchinintuId, {
-          attributes: ['name', 'code']
-        });
-        const fromWarehouse = await Warehouse.findByPk(fromWarehouseId, {
-          attributes: ['name', 'code']
-        });
+        const [fromKunchinittu, fromWarehouse] = await Promise.all([
+          Kunchinittu.findByPk(fromKunchinintuId, {
+            attributes: ['name', 'code']
+          }),
+          Warehouse.findByPk(fromWarehouseId, {
+            attributes: ['name', 'code']
+          })
+        ]);
 
         return res.status(400).json({
           error: `❌ INSUFFICIENT STOCK\n\n` +

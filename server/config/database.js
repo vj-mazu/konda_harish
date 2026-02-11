@@ -27,7 +27,8 @@ const sequelize = dbUrl
         require: true,
         rejectUnauthorized: false // Required for some PaaS providers like Render/Supabase
       },
-      statement_timeout: 30000,
+      statement_timeout: 30000,           // Database-level timeout (30s)
+      query_timeout: 25000,               // Sequelize-level timeout (25s) - fires before DB timeout
       idle_in_transaction_session_timeout: 60000,
       application_name: 'mother_india_stock_mgmt'
     },
@@ -68,7 +69,8 @@ const sequelize = dbUrl
 
     // Query optimization settings
     dialectOptions: {
-      statement_timeout: 30000,
+      statement_timeout: 30000,           // Database-level timeout (30s)
+      query_timeout: 25000,               // Sequelize-level timeout (25s) - fires before DB timeout
       idle_in_transaction_session_timeout: 60000,
       application_name: 'mother_india_stock_mgmt'
     },
