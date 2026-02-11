@@ -64,6 +64,7 @@ const PurchaseRate = sequelize.define('PurchaseRate', {
   bCalculationMethod: {
     type: DataTypes.ENUM('per_bag', 'per_quintal'),
     allowNull: false,
+    defaultValue: 'per_bag',
     field: 'b_calculation_method'
   },
   lf: {
@@ -74,6 +75,7 @@ const PurchaseRate = sequelize.define('PurchaseRate', {
   lfCalculationMethod: {
     type: DataTypes.ENUM('per_bag', 'per_quintal'),
     allowNull: false,
+    defaultValue: 'per_bag',
     field: 'lf_calculation_method'
   },
   egb: {
@@ -113,6 +115,25 @@ const PurchaseRate = sequelize.define('PurchaseRate', {
       key: 'id'
     },
     field: 'updated_by'
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+    allowNull: false,
+    defaultValue: 'pending'
+  },
+  adminApprovedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    },
+    field: 'admin_approved_by'
+  },
+  adminApprovedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'admin_approved_at'
   }
 }, {
   tableName: 'purchase_rates',
@@ -128,12 +149,20 @@ const PurchaseRate = sequelize.define('PurchaseRate', {
 // Associations
 PurchaseRate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 PurchaseRate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' });
+PurchaseRate.belongsTo(User, { foreignKey: 'adminApprovedBy', as: 'adminApprover' });
 
-// Set up Arrival association after module is loaded to avoid circular dependency
-setTimeout(() => {
+// Arrival association - use lazy require to avoid circular dependency
+const setupArrivalAssociation = () => {
   const Arrival = require('./Arrival');
   PurchaseRate.belongsTo(Arrival, { foreignKey: 'arrivalId', as: 'arrival' });
   Arrival.hasOne(PurchaseRate, { foreignKey: 'arrivalId', as: 'purchaseRate' });
-}, 0);
+};
+
+// Try to set up immediately, fallback to setTimeout if needed
+try {
+  setupArrivalAssociation();
+} catch (e) {
+  setTimeout(setupArrivalAssociation, 0);
+}
 
 module.exports = PurchaseRate;

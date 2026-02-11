@@ -14,7 +14,7 @@ router.get('/arrival/:arrivalId', auth, async (req, res) => {
 
     // Set up associations
     const Arrival = require('../models/Arrival');
-    
+
     // Only set up association if it doesn't already exist
     if (!OtherHamaliEntry.associations.arrival) {
       OtherHamaliEntry.belongsTo(Arrival, { foreignKey: 'arrivalId', as: 'arrival' });
@@ -50,10 +50,10 @@ router.get('/arrival/:arrivalId', auth, async (req, res) => {
 router.post('/batch', auth, async (req, res) => {
   try {
     const { arrivalIds = [], riceProductionIds = [], stockMovementIds = [] } = req.body;
-    
-    if ((!arrivalIds || arrivalIds.length === 0) && 
-        (!riceProductionIds || riceProductionIds.length === 0) && 
-        (!stockMovementIds || stockMovementIds.length === 0)) {
+
+    if ((!arrivalIds || arrivalIds.length === 0) &&
+      (!riceProductionIds || riceProductionIds.length === 0) &&
+      (!stockMovementIds || stockMovementIds.length === 0)) {
       return res.json({
         success: true,
         data: { entries: {} }
@@ -69,7 +69,7 @@ router.post('/batch', auth, async (req, res) => {
     if (arrivalIds.length > 0) {
       try {
         const paddyEntries = await OtherHamaliEntry.findAll({
-          where: { 
+          where: {
             arrivalId: { [Op.in]: arrivalIds },
             status: 'approved' // Only show approved entries
           },
@@ -233,9 +233,9 @@ router.post('/batch', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching other hamali entries batch:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch other hamali entries' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch other hamali entries'
     });
   }
 });
@@ -256,7 +256,7 @@ router.post('/bulk', auth, async (req, res) => {
         return res.status(404).json({ error: 'Arrival not found' });
       }
     }
-    
+
     if (riceProductionId && !isStockMovement) {
       const { sequelize } = require('../config/database');
       const [riceProduction] = await sequelize.query(`
@@ -264,12 +264,12 @@ router.post('/bulk', auth, async (req, res) => {
       `, {
         replacements: { riceProductionId }
       });
-      
+
       if (riceProduction.length === 0) {
         return res.status(404).json({ error: 'Rice production not found' });
       }
     }
-    
+
     if (stockMovementId && isStockMovement) {
       const { sequelize } = require('../config/database');
       const [stockMovement] = await sequelize.query(`
@@ -277,11 +277,11 @@ router.post('/bulk', auth, async (req, res) => {
       `, {
         replacements: { stockMovementId }
       });
-      
+
       if (stockMovement.length === 0) {
         return res.status(404).json({ error: 'Stock movement not found' });
       }
-      
+
       console.log('✅ Processing other hamali for stock movement:', { stockMovementId, movementType });
     }
 
@@ -329,9 +329,10 @@ router.post('/bulk', auth, async (req, res) => {
             rate,
             amount,
             remarks,
+            status,
             is_active,
             created_by
-          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :rate, :amount, :remarks, true, :createdBy)
+          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :rate, :amount, :remarks, :status, true, :createdBy)
           RETURNING *
         `, {
           replacements: {
@@ -343,6 +344,7 @@ router.post('/bulk', auth, async (req, res) => {
             rate: parseFloat(rate),
             amount: parseFloat(rate) * parseInt(bags),
             remarks: `Other Hamali: ${description || ''}, ${workerName ? `Worker: ${workerName}, ` : ''}${batchNumber ? `Batch: ${batchNumber}, ` : ''}Rate: ₹${rate}`,
+            status: req.user.role === 'staff' ? 'pending' : 'approved',
             createdBy: req.user.userId
           }
         });
@@ -402,8 +404,8 @@ router.post('/bulk', auth, async (req, res) => {
     }
 
     const autoApproved = req.user.role === 'manager' || req.user.role === 'admin';
-    
-    res.status(201).json({ 
+
+    res.status(201).json({
       message: `${processedEntries.length} other hamali ${processedEntries.length === 1 ? 'entry' : 'entries'} processed successfully`,
       entries: processedEntries,
       autoApproved
@@ -439,7 +441,7 @@ router.put('/:id', auth, async (req, res) => {
 
     // Update entry
     const amount = parseFloat(rate) * parseInt(bags);
-    
+
     await entry.update({
       workType: workType || entry.workType,
       workDetail: workDetail || entry.workDetail,
@@ -490,7 +492,7 @@ router.get('/summary/:date', auth, async (req, res) => {
 
     // Set up the association here to ensure it's available
     const Arrival = require('../models/Arrival');
-    
+
     // Only set up association if it doesn't already exist
     if (!OtherHamaliEntry.associations.arrival) {
       OtherHamaliEntry.belongsTo(Arrival, { foreignKey: 'arrivalId', as: 'arrival' });
@@ -576,7 +578,7 @@ router.get('/summary/:date', auth, async (req, res) => {
       // Group paddy other hamali entries
       paddyEntries.forEach(entry => {
         const key = `paddy-${entry.arrivalId}-${entry.workType}-${entry.workDetail}`;
-        
+
         if (!allOtherHamaliEntries[key]) {
           allOtherHamaliEntries[key] = {
             workType: entry.workType,
@@ -596,7 +598,7 @@ router.get('/summary/:date', auth, async (req, res) => {
 
         allOtherHamaliEntries[key].totalBags += entry.bags;
         allOtherHamaliEntries[key].totalAmount += parseFloat(entry.amount);
-        
+
         allOtherHamaliEntries[key].splits.push({
           workerName: entry.workerName || 'Main Entry',
           batchNumber: entry.batchNumber || 1,
@@ -738,7 +740,7 @@ router.get('/summary/:date', auth, async (req, res) => {
         // Group rice other hamali entries
         riceOtherEntries.forEach(entry => {
           const key = `rice-${entry.rice_production_id || entry.rice_stock_movement_id}-${entry.work_type}-${entry.work_detail}`;
-          
+
           if (!allOtherHamaliEntries[key]) {
             allOtherHamaliEntries[key] = {
               workType: entry.work_type,
@@ -763,7 +765,7 @@ router.get('/summary/:date', auth, async (req, res) => {
 
           allOtherHamaliEntries[key].totalBags += entry.bags;
           allOtherHamaliEntries[key].totalAmount += (entry.rate || 0) * entry.bags;
-          
+
           allOtherHamaliEntries[key].splits.push({
             workerName: entry.worker_name || entry.created_by_username || 'Main Entry',
             bags: entry.bags,
@@ -796,13 +798,13 @@ router.get('/summary/:date', auth, async (req, res) => {
 router.get('/batch', auth, async (req, res) => {
   try {
     const { arrivalIds } = req.query;
-    
+
     if (!arrivalIds) {
       return res.json({ entries: [] });
     }
 
     const ids = arrivalIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-    
+
     if (ids.length === 0) {
       return res.json({ entries: [] });
     }
@@ -947,9 +949,9 @@ router.post('/', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding other hamali entry:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to add other hamali entry' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add other hamali entry'
     });
   }
 });

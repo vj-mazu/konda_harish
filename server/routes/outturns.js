@@ -188,32 +188,36 @@ router.post('/:id/clear', auth, authorize('admin', 'manager'), async (req, res) 
       return res.status(400).json({ error: 'Outturn already cleared' });
     }
 
-    // Get total paddy bags for this outturn (production-shifting + for-production purchases)
-    // This MUST match the logic in available-paddy-bags endpoint
-    const totalPaddyBags = await Arrival.sum('bags', {
-      where: {
-        outturnId: id,
-        movementType: { [Op.in]: ['production-shifting', 'purchase'] }
-      }
-    }) || 0;
+    // ⚡ OPTIMIZED: Calculate total, used, and remaining bags in ONE query using CTE
+    const [bagStats] = await sequelize.query(`
+      WITH bag_totals AS (
+        SELECT 
+          COALESCE(SUM(a.bags), 0) as total_bags
+        FROM arrivals a
+        WHERE a."outturnId" = :outturnId
+          AND a."movementType" IN ('production-shifting', 'purchase')
+      ),
+      bag_used AS (
+        SELECT 
+          COALESCE(SUM(rp."paddyBagsDeducted"), 0) as used_bags
+        FROM rice_productions rp
+        WHERE rp."outturnId" = :outturnId
+          AND rp.status IN ('pending', 'approved')
+      )
+      SELECT 
+        bt.total_bags,
+        bu.used_bags,
+        (bt.total_bags - bu.used_bags) as remaining_bags
+      FROM bag_totals bt, bag_used bu
+    `, {
+      replacements: { outturnId: id },
+      type: sequelize.QueryTypes.SELECT,
+      transaction
+    });
 
-    console.log('🔍 Clear Outturn - Total paddy bags:', totalPaddyBags);
+    const { total_bags: totalPaddyBags, used_bags: usedBags, remaining_bags: remainingBags } = bagStats;
 
-    // Get total bags DEDUCTED (use paddyBagsDeducted field)
-    // This MUST match the logic in available-paddy-bags endpoint
-    const usedBags = await RiceProduction.sum('paddyBagsDeducted', {
-      where: {
-        outturnId: id,
-        status: { [Op.in]: ['pending', 'approved'] }
-      }
-    }) || 0;
-
-    console.log('🔍 Clear Outturn - Used bags:', usedBags);
-
-    // Calculate remaining bags (MUST match available-paddy-bags calculation)
-    const remainingBags = totalPaddyBags - usedBags;
-
-    console.log('🔍 Clear Outturn - Remaining bags:', remainingBags);
+    console.log('🔍 Clear Outturn - Total:', totalPaddyBags, 'Used:', usedBags, 'Remaining:', remainingBags);
 
     if (remainingBags <= 0) {
       await transaction.rollback();

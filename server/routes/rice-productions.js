@@ -126,6 +126,92 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Get pending rice productions for approval (managers/admins only)
+router.get('/pending-list', auth, async (req, res) => {
+  try {
+    // Only managers and admins can view pending list
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const productions = await RiceProduction.findAll({
+      where: { status: 'pending' },
+      include: [
+        { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety', 'type'] },
+        { model: Packaging, as: 'packaging', attributes: ['brandName', 'code', 'allottedKg'] },
+        { model: User, as: 'creator', attributes: ['username', 'role'] }
+      ],
+      order: [['date', 'DESC'], ['createdAt', 'DESC']]
+    });
+
+    res.json({ productions });
+  } catch (error) {
+    console.error('Get pending rice productions error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending rice productions' });
+  }
+});
+
+// Bulk approve rice productions
+router.post('/bulk-approve', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { productionIds } = req.body;
+    if (!productionIds || !Array.isArray(productionIds) || productionIds.length === 0) {
+      return res.status(400).json({ error: 'Production IDs are required' });
+    }
+
+    await RiceProduction.update(
+      {
+        status: 'approved',
+        approvedBy: req.user.userId,
+        approvedAt: new Date()
+      },
+      { where: { id: productionIds, status: 'pending' } }
+    );
+
+    // Clear cache
+    await require('../services/cacheService').clear();
+
+    res.json({ message: `${productionIds.length} production(s) approved successfully` });
+  } catch (error) {
+    console.error('Bulk approve rice productions error:', error);
+    res.status(500).json({ error: 'Failed to approve rice productions' });
+  }
+});
+
+// Bulk reject rice productions
+router.post('/bulk-reject', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { productionIds, remarks } = req.body;
+    if (!productionIds || !Array.isArray(productionIds) || productionIds.length === 0) {
+      return res.status(400).json({ error: 'Production IDs are required' });
+    }
+
+    await RiceProduction.update(
+      {
+        status: 'rejected',
+        rejectionRemarks: remarks || null
+      },
+      { where: { id: productionIds, status: 'pending' } }
+    );
+
+    // Clear cache
+    await require('../services/cacheService').clear();
+
+    res.json({ message: `${productionIds.length} production(s) rejected successfully` });
+  } catch (error) {
+    console.error('Bulk reject rice productions error:', error);
+    res.status(500).json({ error: 'Failed to reject rice productions' });
+  }
+});
+
 // Get rice productions by outturn
 router.get('/outturn/:id', auth, async (req, res) => {
   try {
@@ -542,20 +628,126 @@ router.post('/:id/approve', auth, authorize('manager', 'admin'), async (req, res
   }
 });
 
-// Update rice production
-router.put('/:id', auth, async (req, res) => {
+// Get pending rice production list (Manager/Admin only)
+router.get('/pending-list', auth, authorize('manager', 'admin'), async (req, res) => {
+  try {
+    const where = { status: 'pending' };
+
+    const productions = await RiceProduction.findAll({
+      where,
+      include: [
+        { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety', 'type'] },
+        { model: Packaging, as: 'packaging', attributes: ['brandName', 'code', 'allottedKg'] },
+        { model: User, as: 'creator', attributes: ['username', 'role'] }
+      ],
+      order: [['date', 'ASC'], ['createdAt', 'ASC']],
+      limit: 500
+    });
+
+    res.json({
+      count: productions.length,
+      productions,
+      role: req.user.role
+    });
+  } catch (error) {
+    console.error('Get pending rice production list error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending rice productions' });
+  }
+});
+
+// Bulk approve rice productions (Manager/Admin only)
+router.post('/bulk-approve', auth, authorize('manager', 'admin'), async (req, res) => {
+  try {
+    const { productionIds } = req.body;
+
+    if (!productionIds || !Array.isArray(productionIds) || productionIds.length === 0) {
+      return res.status(400).json({ error: 'productionIds array is required' });
+    }
+
+    const results = { approved: [], failed: [] };
+
+    for (const id of productionIds) {
+      try {
+        const production = await RiceProduction.findByPk(id);
+        if (!production) {
+          results.failed.push({ id, reason: 'Not found' });
+          continue;
+        }
+        if (production.status !== 'pending') {
+          results.failed.push({ id, reason: 'Not pending' });
+          continue;
+        }
+
+        await production.update({
+          status: 'approved',
+          approvedBy: req.user.userId,
+          approvedAt: new Date()
+        });
+        results.approved.push(id);
+      } catch (error) {
+        results.failed.push({ id, reason: error.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk approval completed: ${results.approved.length} approved, ${results.failed.length} failed`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk approve rice productions error:', error);
+    res.status(500).json({ error: 'Failed to bulk approve rice productions' });
+  }
+});
+
+// Bulk reject rice productions (Manager/Admin only)
+router.post('/bulk-reject', auth, authorize('manager', 'admin'), async (req, res) => {
+  try {
+    const { productionIds, remarks } = req.body;
+
+    if (!productionIds || !Array.isArray(productionIds) || productionIds.length === 0) {
+      return res.status(400).json({ error: 'productionIds array is required' });
+    }
+
+    const results = { rejected: [], failed: [] };
+
+    for (const id of productionIds) {
+      try {
+        const production = await RiceProduction.findByPk(id);
+        if (!production) {
+          results.failed.push({ id, reason: 'Not found' });
+          continue;
+        }
+        if (production.status !== 'pending') {
+          results.failed.push({ id, reason: 'Not pending' });
+          continue;
+        }
+
+        await production.update({
+          status: 'rejected'
+        });
+        results.rejected.push(id);
+      } catch (error) {
+        results.failed.push({ id, reason: error.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk rejection completed: ${results.rejected.length} rejected, ${results.failed.length} failed`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk reject rice productions error:', error);
+    res.status(500).json({ error: 'Failed to bulk reject rice productions' });
+  }
+});
+
+// Update rice production (Manager/Admin only - Staff cannot edit)
+router.put('/:id', auth, authorize('manager', 'admin'), async (req, res) => {
   try {
     const production = await RiceProduction.findByPk(req.params.id);
 
     if (!production) {
       return res.status(404).json({ error: 'Rice production entry not found' });
-    }
-
-    // Only creator or manager/admin can update
-    if (production.createdBy !== req.user.userId &&
-      req.user.role !== 'manager' &&
-      req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Not authorized to update this production entry' });
     }
 
     // Status check - Admins can bypass the 'approved' block
@@ -706,8 +898,8 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Delete rice production
-router.delete('/:id', auth, async (req, res) => {
+// Delete rice production (Manager/Admin only - Staff cannot delete)
+router.delete('/:id', auth, authorize('manager', 'admin'), async (req, res) => {
   try {
     const production = await RiceProduction.findByPk(req.params.id);
 
@@ -715,14 +907,7 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Rice production entry not found' });
     }
 
-    // Only creator or manager/admin can delete
-    if (production.createdBy !== req.user.userId &&
-      req.user.role !== 'manager' &&
-      req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Not authorized to delete this entry' });
-    }
-
-    // Cannot delete approved entries
+    // Cannot delete approved entries unless admin
     if (production.status === 'approved' && req.user.role !== 'admin') {
       return res.status(400).json({ error: 'Only admins can delete approved entries' });
     }

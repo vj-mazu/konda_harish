@@ -199,12 +199,10 @@ const Navbar: React.FC = () => {
               <NavLink to="/locations" $active={isActive('/locations')}>
                 Locations
               </NavLink>
-              {pendingCount > 0 && (
-                <ApprovalButton onClick={() => setShowApprovalModal(true)}>
-                  🔔 Pending Arrivals
-                  <NotificationBadge>{pendingCount}</NotificationBadge>
-                </ApprovalButton>
-              )}
+              <NavLink to="/pending-approvals" $active={isActive('/pending-approvals')}>
+                📋 Pending
+                {pendingCount > 0 && <NotificationBadge>{pendingCount}</NotificationBadge>}
+              </NavLink>
             </>
           )}
           {user && user.role === 'admin' && (

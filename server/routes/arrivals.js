@@ -1650,7 +1650,11 @@ router.get('/pending-list', auth, authorize('manager', 'admin'), async (req, res
 
     const arrivals = await Arrival.findAll({
       where,
-      attributes: ['id', 'slNo', 'date', 'movementType', 'variety', 'bags', 'netWeight', 'status', 'createdAt'], // Select only needed columns
+      attributes: [
+        'id', 'slNo', 'date', 'movementType', 'variety', 'bags', 'netWeight',
+        'wbNo', 'lorryNumber', 'broker', 'fromLocation', 'grossWeight', 'tareWeight',
+        'moisture', 'cutting', 'status', 'createdAt'
+      ],
       include: [
         { model: User, as: 'creator', attributes: ['username', 'role'] },
         { model: User, as: 'approver', attributes: ['username', 'role'] },
@@ -1658,7 +1662,8 @@ router.get('/pending-list', auth, authorize('manager', 'admin'), async (req, res
         { model: Warehouse, as: 'toWarehouse', attributes: ['name', 'code'] },
         { model: Warehouse, as: 'fromWarehouse', attributes: ['name', 'code'] },
         { model: Warehouse, as: 'toWarehouseShift', attributes: ['name', 'code'] },
-        { model: Kunchinittu, as: 'fromKunchinittu', attributes: ['name', 'code'] }
+        { model: Kunchinittu, as: 'fromKunchinittu', attributes: ['name', 'code'] },
+        { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety'] }
       ],
       order: [['date', 'ASC'], ['createdAt', 'ASC']],
       limit: 500 // Safety limit for 10 lakh record performance

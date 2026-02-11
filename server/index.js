@@ -865,7 +865,7 @@ const startServer = async () => {
       // Migration 63: Add rate and amount columns to rice_hamali_entries
       try {
         console.log('🔄 Migration 63: Adding rate and amount columns to rice_hamali_entries...');
-        
+
         // Check if columns already exist
         const [existingColumns] = await sequelize.query(`
           SELECT column_name
@@ -873,7 +873,7 @@ const startServer = async () => {
           WHERE table_name = 'rice_hamali_entries'
             AND column_name IN ('rate', 'amount')
         `);
-        
+
         const hasRate = existingColumns.some(col => col.column_name === 'rate');
         const hasAmount = existingColumns.some(col => col.column_name === 'amount');
 
@@ -974,6 +974,57 @@ const startServer = async () => {
         await finalPerformanceIndexes.up(sequelize.getQueryInterface());
       } catch (error) {
         console.log('⚠️ Migration 67 warning:', error.message);
+      }
+
+      // Migration 68: Add purchase rate approval workflow columns
+      try {
+        const addPurchaseRateApprovalWorkflow = require('./migrations/68_add_purchase_rate_approval_workflow');
+        const queryInterface = sequelize.getQueryInterface();
+        await addPurchaseRateApprovalWorkflow.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 68: Purchase rate approval workflow columns added');
+      } catch (error) {
+        console.log('⚠️ Migration 68 warning:', error.message);
+      }
+
+      // Migration 69: Add status column to rice_hamali_entries
+      try {
+        const addStatusToRiceHamaliEntries = require('./migrations/69_add_status_to_rice_hamali_entries');
+        await addStatusToRiceHamaliEntries();
+      } catch (error) {
+        console.log('⚠️ Migration 69 warning:', error.message);
+      }
+
+      // Migration 70: Add rejection columns to rice_stock_movements
+      try {
+        const addRejectionColumns = require('./migrations/70_add_rejection_columns_to_rice_stock_movements');
+        await addRejectionColumns.up();
+      } catch (error) {
+        console.log('⚠️ Migration 70 warning:', error.message);
+      }
+
+      // Migration 71: Add rejection columns to hamali entries tables
+      try {
+        const addHamaliRejectionColumns = require('./migrations/71_add_rejection_columns_to_hamali_entries');
+        await addHamaliRejectionColumns.up();
+      } catch (error) {
+        console.log('⚠️ Migration 71 warning:', error.message);
+      }
+
+      // Migration 72: Add performance indexes for outturn and purchase operations
+      try {
+        const addPerformanceIndexes = require('./migrations/72_add_performance_indexes_outturn_purchase');
+        await addPerformanceIndexes.up();
+      } catch (error) {
+        console.log('⚠️ Migration 72 warning:', error.message);
+      }
+
+      // Migration 73: Add hamali book performance indexes
+      try {
+        const addHamaliBookPerformanceIndexes = require('./migrations/73_add_hamali_book_performance_indexes');
+        await addHamaliBookPerformanceIndexes.up(sequelize.getQueryInterface(), sequelize.Sequelize);
+        console.log('✅ Migration 73: Hamali Book performance indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 73 warning:', error.message);
       }
 
       // Auto-fix: RJ Broken and Rejection Rice product types

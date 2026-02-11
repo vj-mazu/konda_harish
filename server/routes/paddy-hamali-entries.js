@@ -8,6 +8,91 @@ const Outturn = require('../models/Outturn');
 
 const router = express.Router();
 
+// Get pending paddy hamali entries for approval (managers/admins only)
+router.get('/pending-list', auth, async (req, res) => {
+  try {
+    // Only managers and admins can view pending list
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const entries = await PaddyHamaliEntry.findAll({
+      where: { status: 'pending' },
+      include: [
+        {
+          model: Arrival,
+          as: 'arrival',
+          attributes: ['id', 'slNo', 'broker', 'date', 'bags', 'variety', 'movementType']
+        },
+        { model: User, as: 'addedByUser', attributes: ['id', 'username', 'role'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({ entries });
+  } catch (error) {
+    console.error('Get pending paddy hamali entries error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending paddy hamali entries' });
+  }
+});
+
+// Bulk approve paddy hamali entries
+router.post('/bulk-approve', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { entryIds } = req.body;
+    if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+      return res.status(400).json({ error: 'Entry IDs are required' });
+    }
+
+    await PaddyHamaliEntry.update(
+      {
+        status: 'approved',
+        approvedBy: req.user.userId,
+        approvedAt: new Date()
+      },
+      { where: { id: entryIds, status: 'pending' } }
+    );
+
+    res.json({ message: `${entryIds.length} paddy hamali entry/entries approved successfully` });
+  } catch (error) {
+    console.error('Bulk approve paddy hamali entries error:', error);
+    res.status(500).json({ error: 'Failed to approve paddy hamali entries' });
+  }
+});
+
+// Bulk reject paddy hamali entries
+router.post('/bulk-reject', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { entryIds, remarks } = req.body;
+    if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+      return res.status(400).json({ error: 'Entry IDs are required' });
+    }
+
+    await PaddyHamaliEntry.update(
+      {
+        status: 'rejected',
+        rejectionRemarks: remarks || null,
+        rejectedBy: req.user.userId,
+        rejectedAt: new Date()
+      },
+      { where: { id: entryIds, status: 'pending' } }
+    );
+
+    res.json({ message: `${entryIds.length} paddy hamali entry/entries rejected` });
+  } catch (error) {
+    console.error('Bulk reject paddy hamali entries error:', error);
+    res.status(500).json({ error: 'Failed to reject paddy hamali entries' });
+  }
+});
+
 // GET hamali entries by arrival IDs (batch) - MISSING ENDPOINT
 router.post('/batch', auth, async (req, res) => {
   try {

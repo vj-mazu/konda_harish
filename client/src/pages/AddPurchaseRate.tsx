@@ -355,9 +355,9 @@ const AddPurchaseRate: React.FC = () => {
             h: rate.h.toString(),
             hCalculationMethod: rate.hCalculationMethod || 'per_bag',
             b: rate.b.toString(),
-            bCalculationMethod: rate.bCalculationMethod,
+            bCalculationMethod: rate.bCalculationMethod || 'per_bag',
             lf: rate.lf.toString(),
-            lfCalculationMethod: rate.lfCalculationMethod,
+            lfCalculationMethod: rate.lfCalculationMethod || 'per_bag',
             egb: rate.egb.toString()
           });
           setIsUpdate(true);
@@ -476,19 +476,22 @@ const AddPurchaseRate: React.FC = () => {
     adjustmentParts.push(`${suteValue > 0 ? '+' : ''}${formData.sute || '0'}${suteLabel}`);
   }
 
-  // Show hamali with correct sign
+  // Show hamali with correct sign and calculation method suffix
   if (effectiveHamaliValue !== 0) {
-    adjustmentParts.push(`${effectiveHamaliValue > 0 ? '+' : ''}${effectiveHamaliValue}h`);
+    const hLabel = formData.hCalculationMethod === 'per_bag' ? 'h/b' : 'h/q';
+    adjustmentParts.push(`${effectiveHamaliValue > 0 ? '+' : ''}${effectiveHamaliValue}${hLabel}`);
   }
   if (parseFloat(formData.b || '0') !== 0) {
-    adjustmentParts.push(`+${formData.b || '0'}b`);
+    const bLabel = formData.bCalculationMethod === 'per_bag' ? 'b/b' : 'b/q';
+    adjustmentParts.push(`+${formData.b || '0'}${bLabel}`);
   }
   // LF only shown for CDL/CDWB (0 for MDL/MDWB)
   if (effectiveLfValue !== 0) {
-    adjustmentParts.push(`+${effectiveLfValue}lf`);
+    const lfLabel = formData.lfCalculationMethod === 'per_bag' ? 'lf/b' : 'lf/q';
+    adjustmentParts.push(`+${effectiveLfValue}${lfLabel}`);
   }
   if (showEGB && parseFloat(formData.egb || '0') !== 0) {
-    adjustmentParts.push(`+${formData.egb || '0'}egb`);
+    adjustmentParts.push(`+${formData.egb || '0'}egb/b`);
   }
 
   const amountFormula = adjustmentParts.length > 0

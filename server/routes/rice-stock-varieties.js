@@ -19,7 +19,7 @@ const router = express.Router();
 // Get standardized rice stock varieties from outturns
 router.get('/rice-stock/varieties', auth, async (req, res) => {
     try {
-        const { 
+        const {
             processing_type, // 'Raw' or 'Steam' filter
             search,          // Search term for variety name
             limit = 100,     // Limit results
@@ -50,15 +50,15 @@ router.get('/rice-stock/varieties', auth, async (req, res) => {
             paramIndex++;
         }
 
-        // Only include non-cleared outturns
-        whereConditions.push('o.is_cleared = false');
+        // ✅ INCLUDE ALL OUTTURNS (even if cleared) - varieties should remain available
+        // Removed filter: o.is_cleared = false
 
-        const whereClause = whereConditions.length > 0 
+        const whereClause = whereConditions.length > 0
             ? `WHERE ${whereConditions.join(' AND ')}`
             : '';
 
         // Build SELECT fields based on metadata requirement
-        const selectFields = include_metadata === 'true' 
+        const selectFields = include_metadata === 'true'
             ? `
                 o.id,
                 o.code,
@@ -122,9 +122,9 @@ router.get('/rice-stock/varieties', auth, async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error fetching rice stock varieties:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to fetch rice stock varieties',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -147,11 +147,11 @@ router.post('/rice-stock/varieties/validate', auth, async (req, res) => {
         // Validate by outturn_id if provided
         if (outturn_id) {
             const outturn = await Outturn.findOne({
-                where: { 
-                    id: outturn_id,
-                    is_cleared: false
+                where: {
+                    id: outturn_id
+                    // ✅ Removed is_cleared filter - allow cleared outturns
                 },
-                attributes: ['id', 'code', 'allottedVariety', 'type']
+                attributes: ['id', 'code', 'allottedVariety', 'type', 'is_cleared']
             });
 
             if (outturn) {
@@ -176,7 +176,7 @@ router.post('/rice-stock/varieties/validate', auth, async (req, res) => {
                     o.type as processing_type
                 FROM outturns o
                 WHERE TRIM(UPPER(CONCAT(o."allottedVariety", ' ', o.type))) = $1
-                  AND o.is_cleared = false
+                  -- ✅ Removed is_cleared filter - allow cleared outturns
                 ORDER BY o."createdAt" DESC
                 LIMIT 1
             `, {
@@ -207,7 +207,7 @@ router.post('/rice-stock/varieties/validate', auth, async (req, res) => {
                         UPPER(o."allottedVariety") LIKE $1 OR
                         UPPER(CONCAT(o."allottedVariety", ' ', o.type)) LIKE $1
                     )
-                    AND o.is_cleared = false
+                    -- ✅ Removed is_cleared filter - allow cleared outturns
                     ORDER BY relevance_score DESC, o."allottedVariety", o.type
                     LIMIT 5
                 `, {
@@ -234,9 +234,9 @@ router.post('/rice-stock/varieties/validate', auth, async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error validating rice stock variety:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to validate rice stock variety',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -245,7 +245,7 @@ router.post('/rice-stock/varieties/validate', auth, async (req, res) => {
 router.get('/rice-stock/varieties/:outturn_id/usage', auth, async (req, res) => {
     try {
         const { outturn_id } = req.params;
-        const { 
+        const {
             start_date,
             end_date,
             movement_type, // 'purchase', 'sale', 'palti'
@@ -313,7 +313,7 @@ router.get('/rice-stock/varieties/:outturn_id/usage', auth, async (req, res) => 
         }
 
         const stats = usageStats[0];
-        
+
         // Get movement type breakdown
         const [movementBreakdown] = await sequelize.query(`
             SELECT 
@@ -363,9 +363,9 @@ router.get('/rice-stock/varieties/:outturn_id/usage', auth, async (req, res) => 
 
     } catch (error) {
         console.error('❌ Error getting rice stock variety usage:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get usage statistics',
-            message: error.message 
+            message: error.message
         });
     }
 });

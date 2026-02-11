@@ -88,6 +88,25 @@ const PaddyHamaliEntry = sequelize.define('PaddyHamaliEntry', {
     type: DataTypes.INTEGER,
     allowNull: true,
     field: 'batch_number'
+  },
+  rejectionRemarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'rejection_remarks'
+  },
+  rejectedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    },
+    field: 'rejected_by'
+  },
+  rejectedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'rejected_at'
   }
 }, {
   tableName: 'paddy_hamali_entries',
@@ -104,7 +123,11 @@ const PaddyHamaliEntry = sequelize.define('PaddyHamaliEntry', {
 PaddyHamaliEntry.belongsTo(User, { foreignKey: 'addedBy', as: 'addedByUser' });
 PaddyHamaliEntry.belongsTo(User, { foreignKey: 'approvedBy', as: 'approvedByUser' });
 
-// Set up Arrival association - will be properly initialized in route handlers
-// This is handled in the route files where both models are imported
+// Set up Arrival association - importing dynamically to avoid circular dependencies
+const setupArrivalAssociation = () => {
+  const Arrival = require('./Arrival');
+  PaddyHamaliEntry.belongsTo(Arrival, { foreignKey: 'arrivalId', as: 'arrival' });
+};
+setupArrivalAssociation();
 
 module.exports = PaddyHamaliEntry;

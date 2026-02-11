@@ -1624,7 +1624,7 @@ const Records: React.FC = () => {
     } else {
       // Open the form and fetch existing rate if any
       setExpandedRateRecordId(recordId);
-      
+
       // IMPORTANT: Reset form to defaults FIRST before fetching
       // This prevents old values from showing if the fetch fails
       setRateFormData({
@@ -1641,7 +1641,7 @@ const Records: React.FC = () => {
         egb: '0',
         hCalculationMethod: 'per_bag'
       });
-      
+
       try {
         const response = await axios.get<{ purchaseRate: any }>(`/purchase-rates/${recordId}`);
         if (response.data.purchaseRate) {
@@ -1655,9 +1655,9 @@ const Records: React.FC = () => {
             rateType: rate.rateType,
             h: rate.h.toString(),
             b: rate.b.toString(),
-            bCalculationMethod: rate.bCalculationMethod,
+            bCalculationMethod: rate.bCalculationMethod || 'per_bag',
             lf: rate.lf.toString(),
-            lfCalculationMethod: rate.lfCalculationMethod,
+            lfCalculationMethod: rate.lfCalculationMethod || 'per_bag',
             egb: rate.egb.toString(),
             hCalculationMethod: rate.hCalculationMethod || 'per_bag'
           });
@@ -2214,14 +2214,14 @@ const Records: React.FC = () => {
           });
 
           stockMovements = (movementsResponse.data as any).data?.movements || [];
-          
+
           // Update pagination state from response
           const pagination = (movementsResponse.data as any).data?.pagination;
           if (pagination) {
             setRiceStockTotalPages(pagination.totalPages || 1);
             setRiceStockTotalRecords(pagination.totalRecords || 0);
           }
-          
+
           console.log('✅ Rice stock movements response:', stockMovements.length, 'records (page', riceStockPage, 'of', pagination?.totalPages || 1, ')');
 
           // Filter by approval status on frontend (show all statuses for debugging)
@@ -3426,283 +3426,283 @@ const Records: React.FC = () => {
                 <tbody>
                   {processedRiceStockData.map((item: any, idx: number) => {
 
-                      // Determine row color based on movement type
-                      let rowColor = 'white';
-                      if (item.movementType === 'purchase') {
-                        rowColor = '#d1fae5';
-                      } else if (item.movementType === 'sale') {
-                        rowColor = '#fee2e2';
-                      } else if (item.movementType === 'palti') {
-                        rowColor = '#fef3c7';
-                      } else if (idx % 2 === 0) {
-                        rowColor = '#f9fafb';
-                      }
+                    // Determine row color based on movement type
+                    let rowColor = 'white';
+                    if (item.movementType === 'purchase') {
+                      rowColor = '#d1fae5';
+                    } else if (item.movementType === 'sale') {
+                      rowColor = '#fee2e2';
+                    } else if (item.movementType === 'palti') {
+                      rowColor = '#fef3c7';
+                    } else if (idx % 2 === 0) {
+                      rowColor = '#f9fafb';
+                    }
 
-                      // Remove top border for grouped rows (not first of group)
-                      const borderStyle = item._isPartOfGroup && !item._isFirstOfGroup
-                        ? 'none'
-                        : '1px solid #e5e7eb';
+                    // Remove top border for grouped rows (not first of group)
+                    const borderStyle = item._isPartOfGroup && !item._isFirstOfGroup
+                      ? 'none'
+                      : '1px solid #e5e7eb';
 
-                      return (
-                        <tr
-                          key={item.id}
-                          style={{
-                            backgroundColor: rowColor,
-                            borderTop: borderStyle
-                          }}
-                        >
-                          {/* Only render SL cell for first row of group (with rowspan) */}
-                          {item._isFirstOfGroup && (
-                            <td rowSpan={item._rowspan} style={{
-                              verticalAlign: 'middle',
-                              textAlign: 'center',
-                              fontWeight: 'bold',
-                              borderBottom: item._isPartOfGroup ? '1px solid #e5e7eb' : 'none'
-                            }}>
-                              {item._slNumber}
-                            </td>
-                          )}
-                          {/* Only render Date cell for first row of group (with rowspan) */}
-                          {item._isFirstOfGroup && (
-                            <td rowSpan={item._rowspan} style={{
-                              verticalAlign: 'middle',
-                              textAlign: 'center',
-                              borderBottom: item._isPartOfGroup ? '1px solid #e5e7eb' : 'none'
-                            }}>
-                              {new Date(item.date).toLocaleDateString('en-GB')}
-                            </td>
-                          )}
-                          <td style={{
-                            textTransform: 'capitalize',
-                            fontWeight: item.movementType !== 'production' ? 'bold' : 'normal',
-                            color: item.movementType === 'purchase' ? '#059669' :
-                              item.movementType === 'sale' ? '#dc2626' :
-                                item.movementType === 'palti' ? '#f59e0b' : 'inherit'
+                    return (
+                      <tr
+                        key={item.id}
+                        style={{
+                          backgroundColor: rowColor,
+                          borderTop: borderStyle
+                        }}
+                      >
+                        {/* Only render SL cell for first row of group (with rowspan) */}
+                        {item._isFirstOfGroup && (
+                          <td rowSpan={item._rowspan} style={{
+                            verticalAlign: 'middle',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            borderBottom: item._isPartOfGroup ? '1px solid #e5e7eb' : 'none'
                           }}>
-                            {item.movementType === 'production' ? '🏭 Production' :
-                              item.movementType === 'purchase' ? '📦 Purchase' :
-                                item.movementType === 'sale' ? '💰 Sale' :
-                                  item.movementType === 'palti' ? '🔄 Palti' :
-                                    item.movementType === 'unknown' ? '❓ Unknown' : item.movementType || '❓ Unknown'}
-                            {/* Show grouped item count badge for sales */}
-                            {item._isGrouped && item._groupCount > 1 && (
-                              <span style={{
-                                marginLeft: '4px',
-                                padding: '2px 6px',
-                                backgroundColor: '#dc2626',
-                                color: 'white',
-                                borderRadius: '10px',
-                                fontSize: '0.7rem',
-                                fontWeight: 'bold'
-                              }}>
-                                {item._groupCount} items
-                              </span>
-                            )}
-                            {/* Compact Palti Details */}
-                            {item.movementType === 'palti' && (
-                              <div style={{ fontSize: '0.7rem', color: '#92400e', marginTop: '2px', lineHeight: '1.2' }}>
-                                <div>📍 {item.from || 'Source'} → {item.to || item.locationCode || 'Target'}</div>
-                                <div>📦 {item.sourceBags || 0}b ({((item.sourceBags || 0) * (item.sourcePackaging?.allottedKg || 26) / 100).toFixed(2)}Q) → {item.bags}b ({Number(item.quantityQuintals || 0).toFixed(2)}Q)</div>
-                                {item.lorryNumber && (
-                                  <div>🚛 {item.lorryNumber}</div>
-                                )}
-                              </div>
-                            )}
-                            {item.movementType === 'palti' && (Number(item.shortageKg) > 0 || Number(item.conversion_shortage_kg) > 0) && (
-                              <div style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 'bold' }}>
-                                ⚠️ Shortage: {Number(item.shortageKg || item.conversion_shortage_kg || 0).toFixed(2)}kg
-                              </div>
-                            )}
+                            {item._slNumber}
                           </td>
-                          <td style={{ fontWeight: 'bold' }}>
-                            {item.movementType === 'palti' ? '-' : (item.billNumber || '-')}
+                        )}
+                        {/* Only render Date cell for first row of group (with rowspan) */}
+                        {item._isFirstOfGroup && (
+                          <td rowSpan={item._rowspan} style={{
+                            verticalAlign: 'middle',
+                            textAlign: 'center',
+                            borderBottom: item._isPartOfGroup ? '1px solid #e5e7eb' : 'none'
+                          }}>
+                            {new Date(item.date).toLocaleDateString('en-GB')}
                           </td>
-                          <td>{item.variety || 'Sum25 RNR Raw'}</td>
-                          <td>{(() => {
-                            // For grouped sales, show all product types
-                            if (item._isGrouped && item._groupedProductTypes) {
-                              return item._groupedProductTypes;
-                            }
-                            // Determine product type from the item data
-                            const productType = item.productType || item.product || '';
-                            const productLower = productType.toLowerCase();
-
-                            if (productLower.includes('rejection rice')) return 'Rejection Rice';
-                            if (productLower.includes('unpolish')) return 'Unpolished';
-                            if (productLower.includes('faram')) return 'Faram';
-                            if (productLower.includes('zero broken') || productLower.includes('0 broken')) return 'Zero Broken';
-                            if (productLower.includes('sizer broken')) return 'Sizer Broken';
-                            if (productLower.includes('rejection broken') || productLower.includes('rj broken')) return 'RJ Broken';
-                            if (productLower.includes('rj rice 1')) return 'RJ Rice 1';
-                            if (productLower.includes('rj rice 2') || productLower.includes('rj rice (2)')) return 'RJ Rice 2';
-                            if (productLower.includes('rj broken')) return 'RJ Broken';
-                            if (productLower.includes('broken')) return 'Broken';
-                            if (productLower.includes('rice')) return 'Rice';
-                            if (productLower.includes('bran')) return 'Bran';
-
-                            return productType || 'Rice'; // Default to Rice if no product type
-                          })()}</td>
-                          <td>{item.bags}</td>
-                          <td>{item.bagSizeKg || item.packaging?.allottedKg || 26}</td>
-                          <td>{isNaN(Number(item.quantityQuintals)) ? '0.00' : Number(item.quantityQuintals).toFixed(2)}</td>
-                          <td>{(() => {
-                            // Handle Palti packaging display: show "source → target"
-                            if (item.movementType === 'palti') {
-                              // FIXED: Use server-provided packaging data with proper fallbacks
-                              const sourcePackaging = item.source_packaging_brand || item.sourcePackaging?.brandName || 'A1';
-                              const targetPackaging = item.target_packaging_brand || item.targetPackaging?.brandName || 'A1';
-
-                              console.log('🔍 DEBUG - Palti packaging data:', {
-                                'item.source_packaging_brand': item.source_packaging_brand,
-                                'item.target_packaging_brand': item.target_packaging_brand,
-                                'item.sourcePackaging': item.sourcePackaging,
-                                'item.targetPackaging': item.targetPackaging,
-                                'FINAL_RESULT': `${sourcePackaging} → ${targetPackaging}`
-                              });
-
-                              return `${sourcePackaging} → ${targetPackaging}`;
-                            }
-
-                            // For other movement types, show regular packaging
-                            const packaging = item.packaging_brand || item.packaging?.brandName || 'A1';
-
-                            return packaging;
-                          })()}</td>
-                          <td>
-                            {item.outturn?.code ? (
-                              <span
-                                style={{
-                                  color: '#7c3aed',
-                                  fontWeight: 'bold',
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline'
-                                }}
-                                onClick={() => navigateToOutturn(item.outturn.code)}
-                                title={`Click to view outturn ${item.outturn.code}`}
-                              >
-                                {item.from || item.outturn.code}
-                              </span>
-                            ) : (
-                              item.from || '-'
-                            )}
-                          </td>
-                          <td>{item.to || item.locationCode || '-'}</td>
-                          <td style={{ textTransform: 'uppercase' }}>{item.movementType === 'palti' ? (item.lorryNumber || '-') : (item.lorryNumber || item.billNumber || '-')}</td>
-                          <td>
-                            <div style={{
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem',
-                              fontWeight: '500',
-                              backgroundColor: item.status === 'approved' ? '#dcfce7' : '#fef3c7',
-                              color: item.status === 'approved' ? '#16a34a' : '#ca8a04',
-                              display: 'inline-block',
-                              marginBottom: '4px'
+                        )}
+                        <td style={{
+                          textTransform: 'capitalize',
+                          fontWeight: item.movementType !== 'production' ? 'bold' : 'normal',
+                          color: item.movementType === 'purchase' ? '#059669' :
+                            item.movementType === 'sale' ? '#dc2626' :
+                              item.movementType === 'palti' ? '#f59e0b' : 'inherit'
+                        }}>
+                          {item.movementType === 'production' ? '🏭 Production' :
+                            item.movementType === 'purchase' ? '📦 Purchase' :
+                              item.movementType === 'sale' ? '💰 Sale' :
+                                item.movementType === 'palti' ? '🔄 Palti' :
+                                  item.movementType === 'unknown' ? '❓ Unknown' : item.movementType || '❓ Unknown'}
+                          {/* Show grouped item count badge for sales */}
+                          {item._isGrouped && item._groupCount > 1 && (
+                            <span style={{
+                              marginLeft: '4px',
+                              padding: '2px 6px',
+                              backgroundColor: '#dc2626',
+                              color: 'white',
+                              borderRadius: '10px',
+                              fontSize: '0.7rem',
+                              fontWeight: 'bold'
                             }}>
-                              {item.status?.toUpperCase() || 'PENDING'}
-                            </div>
-                            {item.creator?.username && (
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                By: {item.creator.username}
-                              </div>
-                            )}
-                          </td>
-                          {/* Only render Actions cell for first row of group (with rowspan) */}
-                          {item._isFirstOfGroup && (
-                            <td rowSpan={item._rowspan} style={{ verticalAlign: 'middle' }}>
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {/* Approve Button for Pending Items */}
-                                {item.status === 'pending' && user?.role !== 'staff' && (
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        console.log('🔍 Approve clicked for item:', {
-                                          id: item.id,
-                                          movementType: item.movementType,
-                                          status: item.status,
-                                          idType: typeof item.id,
-                                          isStockMovement: String(item.id).includes('movement-')
-                                        });
-
-                                        // Check if this is a stock movement (Purchase/Sale/Palti)
-                                        // Stock movements have IDs like "movement-123"
-                                        const isStockMovement = String(item.id).includes('movement-') ||
-                                          ['purchase', 'sale', 'palti'].includes(item.movementType?.toLowerCase());
-
-                                        if (!isStockMovement) {
-                                          // Production entries
-                                          await axios.post(`/rice-productions/${item.id}/approve`);
-                                          toast.success('Rice production approved successfully!');
-                                        } else {
-                                          // Purchase, Sale, Palti use rice-stock-management
-                                          const token = localStorage.getItem('token');
-                                          // Extract numeric ID from movement-{id} format if needed
-                                          const movementId = String(item.id).replace('movement-', '');
-                                          console.log('🔄 Calling rice-stock-management approval for ID:', movementId);
-                                          await axios.patch(`/rice-stock-management/movements/${movementId}/status`, {
-                                            status: 'approved'
-                                          }, {
-                                            headers: { Authorization: `Bearer ${token}` }
-                                          });
-                                          toast.success(`${item.movementType || 'Movement'} approved successfully!`);
-                                        }
-                                        fetchProductionRecords();
-                                        fetchRiceStock();
-                                      } catch (error: any) {
-                                        console.error('❌ Approval error:', error.response?.data || error);
-                                        toast.error(error.response?.data?.error || 'Failed to approve');
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '4px 12px',
-                                      backgroundColor: '#10b981',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    Approve
-                                  </button>
-                                )}
-
-                                {/* Edit Button - show if pending OR if user is admin */}
-                                {(item.status === 'pending' || user?.role === 'admin' || user?.role === 'manager') && (
-                                  <button
-                                    onClick={() => {
-                                      // Set the item for editing
-                                      const movementId = String(item.id).replace('movement-', '');
-                                      setEditingRiceMovement({
-                                        ...item,
-                                        id: movementId // Store clean ID for API call
-                                      });
-                                    }}
-                                    style={{
-                                      padding: '4px 12px',
-                                      backgroundColor: '#3b82f6',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      fontSize: '0.85rem',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '4px'
-                                    }}
-                                    title={item.status === 'approved' ? "Admin Edit: Approved Record" : "Edit this entry"}
-                                  >
-                                    ✏️ Edit
-                                  </button>
-                                )}
-
-                                {/* Rice Hamali button removed as per user request */}
-                              </div>
-                            </td>
+                              {item._groupCount} items
+                            </span>
                           )}
-                        </tr>
-                      );
-                    })}
+                          {/* Compact Palti Details */}
+                          {item.movementType === 'palti' && (
+                            <div style={{ fontSize: '0.7rem', color: '#92400e', marginTop: '2px', lineHeight: '1.2' }}>
+                              <div>📍 {item.from || 'Source'} → {item.to || item.locationCode || 'Target'}</div>
+                              <div>📦 {item.sourceBags || 0}b ({((item.sourceBags || 0) * (item.sourcePackaging?.allottedKg || 26) / 100).toFixed(2)}Q) → {item.bags}b ({Number(item.quantityQuintals || 0).toFixed(2)}Q)</div>
+                              {item.lorryNumber && (
+                                <div>🚛 {item.lorryNumber}</div>
+                              )}
+                            </div>
+                          )}
+                          {item.movementType === 'palti' && (Number(item.shortageKg) > 0 || Number(item.conversion_shortage_kg) > 0) && (
+                            <div style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 'bold' }}>
+                              ⚠️ Shortage: {Number(item.shortageKg || item.conversion_shortage_kg || 0).toFixed(2)}kg
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          {item.movementType === 'palti' ? '-' : (item.billNumber || '-')}
+                        </td>
+                        <td>{item.variety || 'Sum25 RNR Raw'}</td>
+                        <td>{(() => {
+                          // For grouped sales, show all product types
+                          if (item._isGrouped && item._groupedProductTypes) {
+                            return item._groupedProductTypes;
+                          }
+                          // Determine product type from the item data
+                          const productType = item.productType || item.product || '';
+                          const productLower = productType.toLowerCase();
+
+                          if (productLower.includes('rejection rice')) return 'Rejection Rice';
+                          if (productLower.includes('unpolish')) return 'Unpolished';
+                          if (productLower.includes('faram')) return 'Faram';
+                          if (productLower.includes('zero broken') || productLower.includes('0 broken')) return 'Zero Broken';
+                          if (productLower.includes('sizer broken')) return 'Sizer Broken';
+                          if (productLower.includes('rejection broken') || productLower.includes('rj broken')) return 'RJ Broken';
+                          if (productLower.includes('rj rice 1')) return 'RJ Rice 1';
+                          if (productLower.includes('rj rice 2') || productLower.includes('rj rice (2)')) return 'RJ Rice 2';
+                          if (productLower.includes('rj broken')) return 'RJ Broken';
+                          if (productLower.includes('broken')) return 'Broken';
+                          if (productLower.includes('rice')) return 'Rice';
+                          if (productLower.includes('bran')) return 'Bran';
+
+                          return productType || 'Rice'; // Default to Rice if no product type
+                        })()}</td>
+                        <td>{item.bags}</td>
+                        <td>{item.bagSizeKg || item.packaging?.allottedKg || 26}</td>
+                        <td>{isNaN(Number(item.quantityQuintals)) ? '0.00' : Number(item.quantityQuintals).toFixed(2)}</td>
+                        <td>{(() => {
+                          // Handle Palti packaging display: show "source → target"
+                          if (item.movementType === 'palti') {
+                            // FIXED: Use server-provided packaging data with proper fallbacks
+                            const sourcePackaging = item.source_packaging_brand || item.sourcePackaging?.brandName || 'A1';
+                            const targetPackaging = item.target_packaging_brand || item.targetPackaging?.brandName || 'A1';
+
+                            console.log('🔍 DEBUG - Palti packaging data:', {
+                              'item.source_packaging_brand': item.source_packaging_brand,
+                              'item.target_packaging_brand': item.target_packaging_brand,
+                              'item.sourcePackaging': item.sourcePackaging,
+                              'item.targetPackaging': item.targetPackaging,
+                              'FINAL_RESULT': `${sourcePackaging} → ${targetPackaging}`
+                            });
+
+                            return `${sourcePackaging} → ${targetPackaging}`;
+                          }
+
+                          // For other movement types, show regular packaging
+                          const packaging = item.packaging_brand || item.packaging?.brandName || 'A1';
+
+                          return packaging;
+                        })()}</td>
+                        <td>
+                          {item.outturn?.code ? (
+                            <span
+                              style={{
+                                color: '#7c3aed',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                              onClick={() => navigateToOutturn(item.outturn.code)}
+                              title={`Click to view outturn ${item.outturn.code}`}
+                            >
+                              {item.from || item.outturn.code}
+                            </span>
+                          ) : (
+                            item.from || '-'
+                          )}
+                        </td>
+                        <td>{item.to || item.locationCode || '-'}</td>
+                        <td style={{ textTransform: 'uppercase' }}>{item.movementType === 'palti' ? (item.lorryNumber || '-') : (item.lorryNumber || item.billNumber || '-')}</td>
+                        <td>
+                          <div style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            fontWeight: '500',
+                            backgroundColor: item.status === 'approved' ? '#dcfce7' : '#fef3c7',
+                            color: item.status === 'approved' ? '#16a34a' : '#ca8a04',
+                            display: 'inline-block',
+                            marginBottom: '4px'
+                          }}>
+                            {item.status?.toUpperCase() || 'PENDING'}
+                          </div>
+                          {item.creator?.username && (
+                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              By: {item.creator.username}
+                            </div>
+                          )}
+                        </td>
+                        {/* Only render Actions cell for first row of group (with rowspan) */}
+                        {item._isFirstOfGroup && (
+                          <td rowSpan={item._rowspan} style={{ verticalAlign: 'middle' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                              {/* Approve Button for Pending Items */}
+                              {item.status === 'pending' && user?.role !== 'staff' && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      console.log('🔍 Approve clicked for item:', {
+                                        id: item.id,
+                                        movementType: item.movementType,
+                                        status: item.status,
+                                        idType: typeof item.id,
+                                        isStockMovement: String(item.id).includes('movement-')
+                                      });
+
+                                      // Check if this is a stock movement (Purchase/Sale/Palti)
+                                      // Stock movements have IDs like "movement-123"
+                                      const isStockMovement = String(item.id).includes('movement-') ||
+                                        ['purchase', 'sale', 'palti'].includes(item.movementType?.toLowerCase());
+
+                                      if (!isStockMovement) {
+                                        // Production entries
+                                        await axios.post(`/rice-productions/${item.id}/approve`);
+                                        toast.success('Rice production approved successfully!');
+                                      } else {
+                                        // Purchase, Sale, Palti use rice-stock-management
+                                        const token = localStorage.getItem('token');
+                                        // Extract numeric ID from movement-{id} format if needed
+                                        const movementId = String(item.id).replace('movement-', '');
+                                        console.log('🔄 Calling rice-stock-management approval for ID:', movementId);
+                                        await axios.patch(`/rice-stock-management/movements/${movementId}/status`, {
+                                          status: 'approved'
+                                        }, {
+                                          headers: { Authorization: `Bearer ${token}` }
+                                        });
+                                        toast.success(`${item.movementType || 'Movement'} approved successfully!`);
+                                      }
+                                      fetchProductionRecords();
+                                      fetchRiceStock();
+                                    } catch (error: any) {
+                                      console.error('❌ Approval error:', error.response?.data || error);
+                                      toast.error(error.response?.data?.error || 'Failed to approve');
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '4px 12px',
+                                    backgroundColor: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem'
+                                  }}
+                                >
+                                  Approve
+                                </button>
+                              )}
+
+                              {/* Edit Button - show if pending OR if user is admin */}
+                              {(item.status === 'pending' || user?.role === 'admin' || user?.role === 'manager') && (
+                                <button
+                                  onClick={() => {
+                                    // Set the item for editing
+                                    const movementId = String(item.id).replace('movement-', '');
+                                    setEditingRiceMovement({
+                                      ...item,
+                                      id: movementId // Store clean ID for API call
+                                    });
+                                  }}
+                                  style={{
+                                    padding: '4px 12px',
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title={item.status === 'approved' ? "Admin Edit: Approved Record" : "Edit this entry"}
+                                >
+                                  ✏️ Edit
+                                </button>
+                              )}
+
+                              {/* Rice Hamali button removed as per user request */}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </ExcelTable>
             </div>
@@ -7716,13 +7716,13 @@ const Records: React.FC = () => {
                         // For backward compatibility, also calculate kunchinittu-wise stock
                         const kunchinintuStock: { [key: string]: { bags: number; variety: string; kunchinittu: string; warehouse: string } } = {};
                         const processedKunchinintuKeys = new Set<string>(); // CRITICAL FIX: Track processed keys to prevent duplication
-                        
+
                         openingStockItems.forEach((item: any) => {
                           const locationParts = (item.locationCode || item.location || '').split(' - ');
                           const kunchinittu = locationParts[0] || '';
                           const warehouse = locationParts[1] || '';
                           const key = `${item.variety}|${kunchinittu}`;
-                          
+
                           // CRITICAL DUPLICATION FIX: Normalize key and check if already processed
                           const normalizedKey = key.toUpperCase();
                           if (processedKunchinintuKeys.has(normalizedKey)) {
@@ -9315,8 +9315,8 @@ const Records: React.FC = () => {
                               }}>
                                 {record.purchaseRate?.amountFormula || '-'}
                               </td>
-                              <td>{record.purchaseRate?.totalAmount ? `₹${Number(record.purchaseRate.totalAmount).toFixed(2)}` : '-'}</td>
-                              <td>{record.purchaseRate?.averageRate ? `₹${Number(record.purchaseRate.averageRate).toFixed(2)}` : '-'}</td>
+                              <td>{record.purchaseRate?.totalAmount !== undefined && record.purchaseRate?.totalAmount !== null ? `₹${Number(record.purchaseRate.totalAmount).toFixed(2)}` : '-'}</td>
+                              <td>{record.purchaseRate?.averageRate !== undefined && record.purchaseRate?.averageRate !== null ? `₹${Number(record.purchaseRate.averageRate).toFixed(2)}` : '-'}</td>
                               {canEdit && (
                                 <td>
                                   <Button
@@ -9590,7 +9590,7 @@ const Records: React.FC = () => {
                                             // 6. H Contribution
                                             // For MDL/MDWB: If H is negative (user signal to exclude), set to 0. If positive, add it.
                                             // For CDL/CDWB: Use H value as-is
-                                            const hContribution = ['MDL', 'MDWB'].includes(rateFormData.rateType) 
+                                            const hContribution = ['MDL', 'MDWB'].includes(rateFormData.rateType)
                                               ? (hAmount < 0 ? 0 : hAmount)  // MDL/MDWB: negative = 0, positive = add
                                               : hAmount;                      // CDL/CDWB: use as-is
 

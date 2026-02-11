@@ -15,6 +15,7 @@ import Hamali from './pages/Hamali';
 import AddPurchaseRate from './pages/AddPurchaseRate';
 import HamaliBookSimple from './pages/HamaliBookSimple';
 import UserManagement from './pages/UserManagement';
+import PendingApprovals from './pages/PendingApprovals';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import './globalNotification.css';
@@ -135,6 +136,16 @@ const AppContent: React.FC = () => {
               <ProtectedRoute roles={['admin']}>
                 <Layout>
                   <UserManagement />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pending-approvals"
+            element={
+              <ProtectedRoute roles={['manager', 'admin']}>
+                <Layout>
+                  <PendingApprovals />
                 </Layout>
               </ProtectedRoute>
             }

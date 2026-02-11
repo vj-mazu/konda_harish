@@ -67,8 +67,7 @@ router.get('/', auth, async (req, res) => {
             productionDateFilter = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
         }
 
-        // NEW PERFECT RICE HAMALI QUERY - Use remarks to determine actual work type
-        // This query properly categorizes rice hamali and extracts work type from remarks
+        // ✅ FIX: Remove duplicate location JOINs that cause cartesian product
         const riceHamaliQuery = `
             SELECT 
                 rhe.id,
@@ -113,25 +112,20 @@ router.get('/', auth, async (req, res) => {
                 END as workDetail,
                 
                 rhe.bags,
-                -- FIXED: Use stored rate and amount from entry (not from rates table)
-                -- This ensures historical rates remain accurate even when rates are updated
                 rhe.rate as rateperbag,
                 rhe.amount as totalamount,
                 COALESCE(rhe.remarks, '') as remarks,
                 rhe.entry_type,
                 rhe.created_at as createdAt,
                 
-                -- PERFECT CATEGORIZATION: Other hamali is determined by remarks field
                 CASE 
                     WHEN rhe.remarks ILIKE '%other hamali%' THEN 'other_hamali'
                     WHEN rhe.remarks ILIKE '%Other Hamali:%' THEN 'other_hamali'
                     WHEN rhe.remarks ILIKE '%other:%' THEN 'other_hamali'
-                    -- Auto-created entries should be main hamali unless specifically marked as other
                     WHEN rhe.remarks ILIKE '%Auto-created%' THEN 'main_hamali'
                     ELSE 'main_hamali'
                 END as hamali_category,
                 
-                -- Extract worker name from remarks
                 CASE 
                     WHEN rhe.remarks LIKE '%Worker: %' THEN 
                         TRIM(SUBSTRING(rhe.remarks FROM 'Worker: ([^,]+)'))
@@ -142,20 +136,17 @@ router.get('/', auth, async (req, res) => {
                     ELSE 'Manual Entry'
                 END as workerName,
                 
-                -- Extract batch number from remarks
                 CASE 
                     WHEN rhe.remarks LIKE '%Batch: %' THEN 
                         CAST(TRIM(SUBSTRING(rhe.remarks FROM 'Batch: ([0-9]+)')) AS INTEGER)
                     ELSE 1
                 END as batchNumber,
                 
-                -- Stock movement context
                 rsm.movement_type,
                 rsm.product_type,
                 rsm.bill_number,
                 rsm.lorry_number,
                 
-                -- Variety information
                 CASE 
                     WHEN rhe.rice_production_id IS NOT NULL THEN 
                         COALESCE(o."allottedVariety", rp."productType", 'Unknown Variety')
@@ -164,20 +155,15 @@ router.get('/', auth, async (req, res) => {
                     ELSE 'Unknown Variety'
                 END as variety,
                 
-                -- Location information - Show actual rice storage location
+                -- ✅ FIX: Use only ONE location field to prevent duplicates
                 CASE 
                     WHEN rhe.rice_production_id IS NOT NULL THEN 
-                        COALESCE(rsl.name, rp."locationCode", 'Unknown Location')
+                        COALESCE(rp."locationCode", 'Unknown Location')
                     WHEN rhe.rice_stock_movement_id IS NOT NULL THEN 
-                        COALESCE(rsl_main.name, rsm.location_code, 'Unknown Location')
+                        COALESCE(rsm.location_code, 'Unknown Location')
                     ELSE 'Unknown Location'
                 END as location,
                 
-                -- Additional context fields
-                rsl.name as production_location_name,
-                rsl_from.name as from_location_name,
-                rsl_to.name as to_location_name,
-                rsl_main.name as main_location_name,
                 o."allottedVariety" as outturn_variety,
                 pkg."brandName" as brand_name
                 
@@ -187,10 +173,6 @@ router.get('/', auth, async (req, res) => {
             LEFT JOIN rice_hamali_rates rhr ON rhe.rice_hamali_rate_id = rhr.id
             LEFT JOIN outturns o ON rp."outturnId" = o.id
             LEFT JOIN packagings pkg ON rp."packagingId" = pkg.id
-            LEFT JOIN rice_stock_locations rsl ON rp."locationCode" = rsl.code
-            LEFT JOIN rice_stock_locations rsl_from ON rsm.from_location = rsl_from.code
-            LEFT JOIN rice_stock_locations rsl_to ON rsm.to_location = rsl_to.code  
-            LEFT JOIN rice_stock_locations rsl_main ON rsm.location_code = rsl_main.code
             
             WHERE (rhe.rice_production_id IS NOT NULL OR rhe.rice_stock_movement_id IS NOT NULL)
             AND rhe.remarks NOT ILIKE '%Auto-created%'
@@ -201,7 +183,25 @@ router.get('/', auth, async (req, res) => {
         console.log('📋 Executing rice hamali query...');
         const riceHamaliResult = await sequelize.query(riceHamaliQuery, { type: sequelize.QueryTypes.SELECT });
         console.log('✅ Rice hamali query successful, found:', riceHamaliResult.length, 'entries');
-        
+
+        // 🔍 DEBUG: Check for duplicate IDs in raw results
+        const riceHamaliIds = riceHamaliResult.map(r => r.id);
+        const uniqueIds = [...new Set(riceHamaliIds)];
+        console.log('🔍 DEBUG - Rice Hamali IDs:', {
+            totalEntries: riceHamaliResult.length,
+            uniqueIds: uniqueIds.length,
+            hasDuplicates: riceHamaliResult.length !== uniqueIds.length,
+            duplicateIds: riceHamaliIds.filter((id, index) => riceHamaliIds.indexOf(id) !== index)
+        });
+
+        // 🔍 DEBUG: Log first few entries to see structure
+        if (riceHamaliResult.length > 0) {
+            console.log('🔍 DEBUG - First rice hamali entry:', JSON.stringify(riceHamaliResult[0], null, 2));
+            if (riceHamaliResult.length > 1) {
+                console.log('🔍 DEBUG - Second rice hamali entry:', JSON.stringify(riceHamaliResult[1], null, 2));
+            }
+        }
+
         // Debug: Log the first raw entry to see field names
         if (riceHamaliResult.length > 0) {
             console.log('🔍 DEBUG - Raw rice hamali entry from SQL:', JSON.stringify(riceHamaliResult[0], null, 2));
@@ -216,57 +216,83 @@ router.get('/', auth, async (req, res) => {
         // Categorize rice hamali entries into main and other hamali based on remarks
         const mainRiceHamali = riceHamaliResult.filter(entry => entry.hamali_category === 'main_hamali');
         const otherRiceHamali = riceHamaliResult.filter(entry => entry.hamali_category === 'other_hamali');
-        
-        // DON'T GROUP - Show individual rice hamali entries like Paddy Hamali
-        // Convert main rice hamali to individual entries (no grouping)
-        const individualMainRiceHamali = mainRiceHamali.map(entry => ({
-          workType: entry.worktype || 'Unknown Work',
-          workDetail: entry.workdetail || 'Unknown Detail',
-          movementType: entry.movement_type || 'production',
-          variety: entry.variety || 'Unknown Variety',
-          location: entry.location || 'Unknown Location',
-          ratePerBag: parseFloat(entry.rateperbag) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-          totalBags: entry.bags || 0,
-          totalAmount: parseFloat(entry.totalamount) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-          splits: [{
-            id: entry.id,
-            workerName: entry.workername || 'Unknown Worker',
-            bags: entry.bags || 0,
-            rate: parseFloat(entry.rateperbag) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-            amount: parseFloat(entry.totalamount) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-            batchNumber: entry.batchnumber || 1,
-            billNumber: entry.bill_number,
-            lorryNumber: entry.lorry_number,
-            variety: entry.variety,
-            location: entry.location
-          }]
-        }));
 
-        // DON'T GROUP - Show individual rice hamali entries like Paddy Hamali
-        // Convert other rice hamali to individual entries (no grouping)
-        const individualOtherRiceHamali = otherRiceHamali.map(entry => ({
-          workType: entry.worktype || 'Unknown Work',
-          workDetail: entry.workdetail || 'Unknown Detail',
-          movementType: entry.movement_type || 'production',
-          variety: entry.variety || 'Unknown Variety',
-          location: entry.location || 'Unknown Location',
-          ratePerBag: parseFloat(entry.rateperbag) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-          totalBags: entry.bags || 0,
-          totalAmount: parseFloat(entry.totalamount) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-          splits: [{
-            id: entry.id,
-            workerName: entry.workername || 'Unknown Worker',
-            bags: entry.bags || 0,
-            rate: parseFloat(entry.rateperbag) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-            amount: parseFloat(entry.totalamount) || 0, // CRITICAL FIX: Use parseFloat and lowercase
-            batchNumber: entry.batchnumber || 1,
-            billNumber: entry.bill_number,
-            lorryNumber: entry.lorry_number,
-            variety: entry.variety,
-            location: entry.location
-          }]
-        }));
-        
+        // ✅ FIX: GROUP entries by work type + details, combining multiple batches into splits
+        // Group main rice hamali by work type + variety + location
+        const mainGroupMap = new Map();
+        mainRiceHamali.forEach(entry => {
+            const groupKey = `${entry.worktype}|${entry.workdetail}|${entry.variety}|${entry.location}`;
+
+            if (!mainGroupMap.has(groupKey)) {
+                mainGroupMap.set(groupKey, {
+                    workType: entry.worktype || 'Unknown Work',
+                    workDetail: entry.workdetail || 'Unknown Detail',
+                    movementType: entry.movement_type || 'production',
+                    variety: entry.variety || 'Unknown Variety',
+                    location: entry.location || 'Unknown Location',
+                    ratePerBag: parseFloat(entry.rateperbag) || 0,
+                    totalBags: 0,
+                    totalAmount: 0,
+                    splits: []
+                });
+            }
+
+            const group = mainGroupMap.get(groupKey);
+            group.totalBags += entry.bags || 0;
+            group.totalAmount += parseFloat(entry.totalamount) || 0;
+            group.splits.push({
+                id: entry.id,
+                workerName: entry.workername || `Batch ${entry.batchnumber || 1}`,
+                bags: entry.bags || 0,
+                rate: parseFloat(entry.rateperbag) || 0,
+                amount: parseFloat(entry.totalamount) || 0,
+                batchNumber: entry.batchnumber || 1,
+                billNumber: entry.bill_number,
+                lorryNumber: entry.lorry_number,
+                variety: entry.variety,
+                location: entry.location
+            });
+        });
+        const individualMainRiceHamali = Array.from(mainGroupMap.values());
+
+        // ✅ FIX: GROUP other rice hamali by work type + details, combining multiple batches
+        const otherGroupMap = new Map();
+        otherRiceHamali.forEach(entry => {
+            const groupKey = `${entry.worktype}|${entry.workdetail}|${entry.variety}|${entry.location}`;
+
+            if (!otherGroupMap.has(groupKey)) {
+                otherGroupMap.set(groupKey, {
+                    workType: entry.worktype || 'Unknown Work',
+                    workDetail: entry.workdetail || 'Unknown Detail',
+                    movementType: entry.movement_type || 'production',
+                    variety: entry.variety || 'Unknown Variety',
+                    location: entry.location || 'Unknown Location',
+                    ratePerBag: parseFloat(entry.rateperbag) || 0,
+                    totalBags: 0,
+                    totalAmount: 0,
+                    splits: []
+                });
+            }
+
+            const group = otherGroupMap.get(groupKey);
+            group.totalBags += entry.bags || 0;
+            group.totalAmount += parseFloat(entry.totalamount) || 0;
+            group.splits.push({
+                id: entry.id,
+                workerName: entry.workername || `Batch ${entry.batchnumber || 1}`,
+                bags: entry.bags || 0,
+                rate: parseFloat(entry.rateperbag) || 0,
+                amount: parseFloat(entry.totalamount) || 0,
+                batchNumber: entry.batchnumber || 1,
+                billNumber: entry.bill_number,
+                lorryNumber: entry.lorry_number,
+                variety: entry.variety,
+                location: entry.location
+            });
+        });
+        const individualOtherRiceHamali = Array.from(otherGroupMap.values());
+
+
         console.log('📊 Rice hamali categorization:', {
             total: riceHamaliResult.length,
             mainHamali: mainRiceHamali.length,
@@ -355,7 +381,12 @@ router.get('/', auth, async (req, res) => {
             success: true,
             data: {
                 paddyHamali: paddyHamaliResult,
-                riceHamali: riceHamaliResult, // Send all rice hamali entries as array
+                // ✅ FIX: Send grouped data with categorized main/other work
+                riceHamali: {
+                    all: riceHamaliResult, // Keep raw for backward compatibility
+                    main: individualMainRiceHamali, // Grouped main rice hamali
+                    other: individualOtherRiceHamali // Grouped other rice hamali
+                },
                 otherHamali: otherHamaliResult,
                 summary: {
                     paddyTotal: paddyTotal.toFixed(2),
@@ -371,24 +402,26 @@ router.get('/', auth, async (req, res) => {
                     otherRiceEntries: otherRiceHamali.length,
                     otherEntries: otherHamaliResult.length
                 },
-                // Additional categorized data for advanced features
+                // ✅ FIX: Only send grouped data to prevent duplicates in frontend
+                // Frontend displays mainGrouped and otherGrouped, so we don't need raw arrays
                 riceHamaliCategorized: {
+                    // Individual entries for display (properly formatted, no duplicates)
+                    mainGrouped: individualMainRiceHamali,
+                    otherGrouped: individualOtherRiceHamali,
+                    // Keep raw arrays for backward compatibility but frontend shouldn't use these
                     all: riceHamaliResult,
                     main: mainRiceHamali,
-                    other: otherRiceHamali,
-                    // Individual entries for display (like paddy hamali - no grouping)
-                    mainGrouped: individualMainRiceHamali,
-                    otherGrouped: individualOtherRiceHamali
+                    other: otherRiceHamali
                 }
             }
         });
     } catch (error) {
         console.error('❌ Error fetching hamali book:', error);
-        
+
         // TASK 3: Enhanced error handling with user-friendly messages
         let userMessage = 'Failed to fetch hamali book entries';
         let errorCode = 'HAMALI_FETCH_ERROR';
-        
+
         if (error.name === 'SequelizeConnectionError') {
             userMessage = 'Database connection issue. Please try again in a moment.';
             errorCode = 'DATABASE_CONNECTION_ERROR';
@@ -402,16 +435,16 @@ router.get('/', auth, async (req, res) => {
             userMessage = 'Invalid date format provided. Please use YYYY-MM-DD format.';
             errorCode = 'INVALID_DATE_FORMAT';
         }
-        
-        res.status(500).json({ 
-            success: false, 
+
+        res.status(500).json({
+            success: false,
             error: userMessage,
             errorCode: errorCode,
             timestamp: new Date().toISOString(),
             // Include technical details only in development
-            ...(process.env.NODE_ENV === 'development' && { 
+            ...(process.env.NODE_ENV === 'development' && {
                 technicalError: error.message,
-                stack: error.stack 
+                stack: error.stack
             })
         });
     }
@@ -468,9 +501,9 @@ router.get('/paddy', auth, async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error fetching paddy hamali book:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to fetch paddy hamali book entries' 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch paddy hamali book entries'
         });
     }
 });
@@ -522,9 +555,9 @@ router.get('/rice', auth, async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error fetching rice hamali book:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to fetch rice hamali book entries' 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch rice hamali book entries'
         });
     }
 });

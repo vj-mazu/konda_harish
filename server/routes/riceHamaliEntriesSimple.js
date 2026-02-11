@@ -259,9 +259,10 @@ router.post('/bulk', auth, async (req, res) => {
             rate,
             amount,
             remarks,
+            status,
             is_active,
             created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
           RETURNING *
         `, {
           bind: [
@@ -273,6 +274,7 @@ router.post('/bulk', auth, async (req, res) => {
             actualRate,
             bags * actualRate,
             `${workerName ? `Worker: ${workerName}, ` : ''}${batchNumber ? `Batch: ${batchNumber}, ` : ''}${movementType ? `Type: ${movementType}, ` : ''}Rate: ₹${rate}`,
+            req.user.role === 'staff' ? 'pending' : 'approved',
             req.user.userId
           ],
           transaction

@@ -225,8 +225,8 @@ const HamaliBookSimple: React.FC = () => {
 
       // Fetch paddy hamali summary
       try {
-        const paddyResponse = await axios.get<{ summary: any }>(`/paddy-hamali-entries/summary/${dateStr}`, { 
-          headers: { Authorization: `Bearer ${token}` } 
+        const paddyResponse = await axios.get<{ summary: any }>(`/paddy-hamali-entries/summary/${dateStr}`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         paddySummary = paddyResponse.data.summary || {};
       } catch (paddyError) {
@@ -236,8 +236,8 @@ const HamaliBookSimple: React.FC = () => {
 
       // Fetch other hamali summary
       try {
-        const otherResponse = await axios.get<{ summary: any }>(`/other-hamali-entries/summary/${dateStr}`, { 
-          headers: { Authorization: `Bearer ${token}` } 
+        const otherResponse = await axios.get<{ summary: any }>(`/other-hamali-entries/summary/${dateStr}`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         otherSummary = otherResponse.data.summary || {};
       } catch (otherError) {
@@ -269,12 +269,12 @@ const HamaliBookSimple: React.FC = () => {
       const dateStr = selectedDate;
 
       // Use hamali-book API (same as paddy hamali pattern)
-      const response = await axios.get('/hamali-book', { 
-        params: { 
-          dateFrom: dateStr, 
+      const response = await axios.get('/hamali-book', {
+        params: {
+          dateFrom: dateStr,
           dateTo: dateStr
         },
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`
         }
       });
@@ -283,7 +283,7 @@ const HamaliBookSimple: React.FC = () => {
 
       if ((response.data as any).success && (response.data as any).data) {
         const { riceHamali, otherHamali, summary } = (response.data as any).data;
-        
+
         console.log('🍚 Rice hamali data structure:', {
           riceHamaliType: typeof riceHamali,
           riceHamaliKeys: riceHamali ? Object.keys(riceHamali) : 'null',
@@ -292,48 +292,109 @@ const HamaliBookSimple: React.FC = () => {
           otherEntriesCount: riceHamali?.other?.length || 0,
           otherHamaliCount: otherHamali?.length || 0
         });
-        
-        // FIXED: Handle both array and object formats for backward compatibility
+
+        // ✅ FIX: Use riceHamali.main (grouped) instead of riceHamali.all (raw)
+        // Backend now sends grouped data with splits - use that directly!
         let riceEntries = [];
+        let otherRiceEntries = []; // ✅ ADD: Process riceHamali.other too!
+
         if (Array.isArray(riceHamali)) {
           // New format: riceHamali is directly an array
           riceEntries = riceHamali;
+        } else if (riceHamali && riceHamali.main) {
+          // ✅ USE GROUPED DATA: riceHamali.main has batches combined with splits
+          riceEntries = riceHamali.main;
+          // ✅ ALSO GET OTHER RICE WORK!
+          otherRiceEntries = riceHamali.other || [];
         } else if (riceHamali && riceHamali.all) {
-          // Old format: riceHamali is an object with .all property
+          // Fallback: use raw data if main doesn't exist
           riceEntries = riceHamali.all;
         } else if (riceHamali) {
           // Fallback: treat as array if it exists
           riceEntries = Array.isArray(riceHamali) ? riceHamali : [];
         }
-        
+
         const otherEntries = otherHamali || [];
-        
+
         console.log('🍚 Processing entries:', {
           riceEntriesCount: riceEntries.length,
+          otherRiceEntriesCount: otherRiceEntries.length,
           otherEntriesCount: otherEntries.length
         });
-        
+
         // Simple grouping by work type (like paddy hamali)
         const groupedRiceEntries: any = {};
         riceEntries.forEach((entry: any) => {
-          const workType = entry.worktype || 'Rice Work';
+          const workType = entry.workType || entry.worktype || 'Rice Work';
           if (!groupedRiceEntries[workType]) {
             groupedRiceEntries[workType] = [];
           }
-          groupedRiceEntries[workType].push({
-            id: entry.id,
-            bags: entry.bags,
-            totalAmount: parseFloat(entry.totalamount || '0'),
-            workDetail: entry.workdetail,
-            workerName: entry.workername || 'Worker',
-            batchNumber: entry.batchnumber || 1,
-            // Additional fields for rice hamali display
-            variety: entry.variety || entry.worktype, // Use variety or work type
-            location: entry.location || entry.movement_type || 'Production',
-            billNumber: entry.bill_number,
-            lorryNumber: entry.lorry_number,
-            productType: entry.product_type
-          });
+          // ✅ FIX: Check if entry has splits array (from backend grouping)
+          if (entry.splits && entry.splits.length > 0) {
+            // Backend already grouped - preserve splits!
+            groupedRiceEntries[workType].push({
+              id: entry.splits[0]?.id || entry.id || Math.random(),
+              bags: entry.totalBags,
+              totalAmount: entry.totalAmount,
+              workDetail: entry.workDetail,
+              variety: entry.variety,
+              location: entry.location,
+              splits: entry.splits, // ✅ PRESERVE SPLITS ARRAY!
+              billNumber: entry.splits[0]?.billNumber,
+              lorryNumber: entry.splits[0]?.lorryNumber
+            });
+          } else {
+            // Legacy raw entry format
+            groupedRiceEntries[workType].push({
+              id: entry.id,
+              bags: entry.bags,
+              totalAmount: parseFloat(entry.totalamount || '0'),
+              workDetail: entry.workdetail,
+              workerName: entry.workername || 'Worker',
+              batchNumber: entry.batchnumber || 1,
+              variety: entry.variety || entry.worktype,
+              location: entry.location || entry.movement_type || 'Production',
+              billNumber: entry.bill_number,
+              lorryNumber: entry.lorry_number,
+              productType: entry.product_type
+            });
+          }
+        });
+
+        // ✅ ADD: Process otherRiceEntries (Other Rice Work) too!
+        otherRiceEntries.forEach((entry: any) => {
+          const workType = entry.workType || entry.worktype || 'Other Rice Work';
+          if (!groupedRiceEntries[workType]) {
+            groupedRiceEntries[workType] = [];
+          }
+          // Same logic as main rice entries
+          if (entry.splits && entry.splits.length > 0) {
+            groupedRiceEntries[workType].push({
+              id: entry.splits[0]?.id || entry.id || Math.random(),
+              bags: entry.totalBags,
+              totalAmount: entry.totalAmount,
+              workDetail: entry.workDetail,
+              variety: entry.variety,
+              location: entry.location,
+              splits: entry.splits,
+              billNumber: entry.splits[0]?.billNumber,
+              lorryNumber: entry.splits[0]?.lorryNumber
+            });
+          } else {
+            groupedRiceEntries[workType].push({
+              id: entry.id,
+              bags: entry.bags,
+              totalAmount: parseFloat(entry.totalamount || entry.totalAmount || '0'),
+              workDetail: entry.workdetail || entry.workDetail,
+              workerName: entry.workername || 'Worker',
+              batchNumber: entry.batchnumber || 1,
+              variety: entry.variety || entry.worktype,
+              location: entry.location || entry.movement_type || 'Production',
+              billNumber: entry.bill_number,
+              lorryNumber: entry.lorry_number,
+              productType: entry.product_type
+            });
+          }
         });
 
         // FIXED: Filter other hamali entries for RICE-related only
@@ -341,15 +402,15 @@ const HamaliBookSimple: React.FC = () => {
         const riceRelatedOtherEntries = otherEntries.filter((entry: any) => {
           const workType = (entry.workname || entry.work_type || '').toLowerCase();
           const workDetail = (entry.work_detail || '').toLowerCase();
-          
+
           // Include entries that are rice-related or production-related
-          return workType.includes('rice') || 
-                 workType.includes('production') || 
-                 workType.includes('loading') && !workType.includes('paddy') ||
-                 workType.includes('unloading') && !workType.includes('paddy') ||
-                 workDetail.includes('rice') ||
-                 workDetail.includes('production') ||
-                 entry.rice_production_id != null; // Has rice production ID
+          return workType.includes('rice') ||
+            workType.includes('production') ||
+            workType.includes('loading') && !workType.includes('paddy') ||
+            workType.includes('unloading') && !workType.includes('paddy') ||
+            workDetail.includes('rice') ||
+            workDetail.includes('production') ||
+            entry.rice_production_id != null; // Has rice production ID
         });
 
         // Simple grouping for rice-related other hamali only
@@ -369,15 +430,17 @@ const HamaliBookSimple: React.FC = () => {
         });
 
         // Calculate totals for rice hamali only (excluding paddy-related other hamali)
-        const riceHamaliTotal = riceEntries.reduce((sum: number, entry: any) => sum + parseFloat(entry.totalamount || '0'), 0);
+        // ✅ FIX: Handle both totalAmount (grouped) and totalamount (raw)
+        const riceHamaliTotal = riceEntries.reduce((sum: number, entry: any) => sum + (entry.totalAmount || parseFloat(entry.totalamount || '0')), 0);
+        const otherRiceHamaliTotal = otherRiceEntries.reduce((sum: number, entry: any) => sum + (entry.totalAmount || parseFloat(entry.totalamount || '0')), 0);
         const riceOtherTotal = riceRelatedOtherEntries.reduce((sum: number, entry: any) => sum + parseFloat(entry.totalamount || entry.amount || '0'), 0);
 
         // Simple summary (like paddy hamali)
         const riceHamaliSummary = {
           riceHamaliEntries: groupedRiceEntries,
           otherHamaliEntries: groupedOtherEntries,
-          grandTotal: riceHamaliTotal + riceOtherTotal,
-          totalEntries: riceEntries.length + riceRelatedOtherEntries.length
+          grandTotal: riceHamaliTotal + otherRiceHamaliTotal + riceOtherTotal,
+          totalEntries: riceEntries.length + otherRiceEntries.length + riceRelatedOtherEntries.length
         };
 
         console.log('🍚 Final rice hamali summary:', {
@@ -400,7 +463,7 @@ const HamaliBookSimple: React.FC = () => {
           totalEntries: 0
         });
       }
-      
+
     } catch (error: any) {
       console.error('❌ Error fetching rice hamali summary:', error);
       console.error('❌ Error response:', error.response?.data);
@@ -427,10 +490,10 @@ const HamaliBookSimple: React.FC = () => {
 
   const formatLocationDisplay = (arrival: any) => {
     if (!arrival) return 'Unknown Location';
-    
+
     const movementType = arrival.movementType;
     const broker = arrival.broker || 'Unknown Broker';
-    
+
     if (movementType === 'purchase') {
       // Check if it's purchase to outturn (has outturn assigned)
       if (arrival.outturn && arrival.outturn.code) {
@@ -455,14 +518,14 @@ const HamaliBookSimple: React.FC = () => {
       const outturn = arrival.outturn?.code || 'Unknown Outturn';
       return `${arrival.bags || 0} Bags from ${fromKN} ${fromWH} to Outturn ${outturn}`;
     }
-    
+
     // Fallback for unknown movement types
     return `${arrival.bags || 0} Bags from ${broker} to ${arrival.toKunchinittu?.name || 'Unknown Location'}`;
   };
 
   const renderSplitsInfo = (splits: any[]) => {
     if (!splits || splits.length === 0) return null;
-    
+
     // Group splits by worker name (sum both bags and amounts, calculate rate)
     const groupedSplits = splits.reduce((acc, split) => {
       const key = split.workerName;
@@ -472,14 +535,14 @@ const HamaliBookSimple: React.FC = () => {
       acc[key].bags += split.bags;
       acc[key].amount += parseFloat(split.amount || 0);
       // Calculate rate from the split data
-      const splitRate = split.rate || split.ratePerBag || split.rateperbag || 
-                       (split.amount && split.bags ? parseFloat(split.amount) / split.bags : 0);
+      const splitRate = split.rate || split.ratePerBag || split.rateperbag ||
+        (split.amount && split.bags ? parseFloat(split.amount) / split.bags : 0);
       acc[key].rate = splitRate; // Use the rate from split (should be same for all splits of same work)
       return acc;
     }, {});
-    
+
     const splitEntries = Object.entries(groupedSplits);
-    
+
     return (
       <div>
         {splitEntries.map(([worker, data]: [string, any], index) => {
@@ -500,7 +563,7 @@ const HamaliBookSimple: React.FC = () => {
   // Keep the old function for PDF generation
   const formatSplitsInfo = (splits: any[]) => {
     if (!splits || splits.length === 0) return '';
-    
+
     // Group splits by worker name (sum both bags and amounts, calculate rate)
     const groupedSplits = splits.reduce((acc, split) => {
       const key = split.workerName;
@@ -510,12 +573,12 @@ const HamaliBookSimple: React.FC = () => {
       acc[key].bags += split.bags;
       acc[key].amount += parseFloat(split.amount || 0);
       // Calculate rate from the split data
-      const splitRate = split.rate || split.ratePerBag || split.rateperbag || 
-                       (split.amount && split.bags ? parseFloat(split.amount) / split.bags : 0);
+      const splitRate = split.rate || split.ratePerBag || split.rateperbag ||
+        (split.amount && split.bags ? parseFloat(split.amount) / split.bags : 0);
       acc[key].rate = splitRate;
       return acc;
     }, {});
-    
+
     return Object.entries(groupedSplits)
       .map(([worker, data]: [string, any]) => {
         const rate = data.rate || (data.amount && data.bags ? data.amount / data.bags : 0);
@@ -527,10 +590,10 @@ const HamaliBookSimple: React.FC = () => {
   // Helper function for PDF - formats location without bags count
   const formatLocationForPDF = (arrival: any) => {
     if (!arrival) return 'Unknown Location';
-    
+
     const movementType = arrival.movementType;
     const broker = arrival.broker || 'Unknown Broker';
-    
+
     if (movementType === 'purchase') {
       // Check if it's purchase to outturn (has outturn assigned)
       if (arrival.outturn && arrival.outturn.code) {
@@ -555,14 +618,14 @@ const HamaliBookSimple: React.FC = () => {
       const outturn = arrival.outturn?.code || 'Unknown Outturn';
       return `from ${fromKN} ${fromWH} to Outturn ${outturn}`;
     }
-    
+
     // Fallback for unknown movement types
     return `from ${broker} to ${arrival.toKunchinittu?.name || 'Unknown Location'}`;
   };
 
   const calculateBatchTotals = (summary: HamaliSummary) => {
     const batchTotals: { [key: string]: number } = {};
-    
+
     const processSectionEntries = (entries: any[]) => {
       entries.forEach((entry: any) => {
         if (entry.splits && entry.splits.length > 0) {
@@ -575,7 +638,7 @@ const HamaliBookSimple: React.FC = () => {
                 batchNumber = parseInt(match[1]);
               }
             }
-            
+
             const batchKey = `Batch ${batchNumber || 1}`;
             const amount = parseFloat(split.amount || 0);
             batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
@@ -588,7 +651,7 @@ const HamaliBookSimple: React.FC = () => {
         }
       });
     };
-    
+
     // Process all paddy hamali sections
     if (summary.loadingEntries) processSectionEntries(summary.loadingEntries);
     if (summary.unloadingEntries) processSectionEntries(summary.unloadingEntries);
@@ -597,7 +660,7 @@ const HamaliBookSimple: React.FC = () => {
     if (summary.plottingEntries) processSectionEntries(summary.plottingEntries);
     if (summary.shiftingEntries) processSectionEntries(summary.shiftingEntries);
     if (summary.fillingEntries) processSectionEntries(summary.fillingEntries);
-    
+
     // Process other hamali entries
     if (summary.otherHamaliEntries) {
       Object.values(summary.otherHamaliEntries).forEach((entry: any) => {
@@ -611,7 +674,7 @@ const HamaliBookSimple: React.FC = () => {
                 batchNumber = parseInt(match[1]);
               }
             }
-            
+
             const batchKey = `Batch ${batchNumber || 1}`;
             const amount = parseFloat(split.amount || 0);
             batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
@@ -624,7 +687,7 @@ const HamaliBookSimple: React.FC = () => {
         }
       });
     }
-    
+
     return batchTotals;
   };
 
@@ -634,16 +697,16 @@ const HamaliBookSimple: React.FC = () => {
     try {
       // Check if there's data to generate PDF
       const hasData = (activeTab === 'paddy' && summary && summary.totalEntries > 0) ||
-                      (activeTab === 'rice' && riceHamaliSummary && riceHamaliSummary.totalEntries > 0);
-      
+        (activeTab === 'rice' && riceHamaliSummary && riceHamaliSummary.totalEntries > 0);
+
       if (!hasData) {
         toast.error('No records found for this date. Cannot generate PDF.');
         return;
       }
-      
+
       // Show loading toast
       toast.info('Generating PDF...');
-      
+
       // Create a temporary container for PDF content
       const pdfContainer = document.createElement('div');
       pdfContainer.style.position = 'absolute';
@@ -654,17 +717,17 @@ const HamaliBookSimple: React.FC = () => {
       pdfContainer.style.fontFamily = 'Arial, sans-serif';
       pdfContainer.style.fontSize = '12px';
       pdfContainer.style.color = '#000';
-      
+
       // Generate PDF content HTML
       const contentHTML = generatePDFContentHTML();
       pdfContainer.innerHTML = contentHTML;
-      
+
       // Append to body temporarily
       document.body.appendChild(pdfContainer);
-      
+
       // Wait a bit for rendering
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // Convert to canvas
       const canvas = await html2canvas(pdfContainer, {
         scale: 2,
@@ -672,26 +735,26 @@ const HamaliBookSimple: React.FC = () => {
         logging: false,
         backgroundColor: '#ffffff'
       });
-      
+
       // Remove temporary container
       document.body.removeChild(pdfContainer);
-      
+
       // Create PDF
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       let heightLeft = imgHeight;
       let position = 0;
-      
+
       // Add first page
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pdfHeight;
-      
+
       // Add additional pages if content is longer than one page
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
@@ -699,11 +762,11 @@ const HamaliBookSimple: React.FC = () => {
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pdfHeight;
       }
-      
+
       // Download PDF
       const filename = `${activeTab}-hamali-book-${selectedDate}.pdf`;
       pdf.save(filename);
-      
+
       toast.success('PDF downloaded successfully!');
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -721,7 +784,7 @@ const HamaliBookSimple: React.FC = () => {
           <div style="font-size: 14px; margin: 5px 0 0 0;">${formatDate(selectedDate)}</div>
         </div>
     `;
-    
+
     // PADDY HAMALI CONTENT
     if (activeTab === 'paddy' && summary) {
       const paddySections = [
@@ -733,7 +796,7 @@ const HamaliBookSimple: React.FC = () => {
         { entries: summary.shiftingEntries, title: 'Paddy Shifting' },
         { entries: summary.fillingEntries, title: 'Paddy Filling with Stitching' }
       ];
-      
+
       paddySections.forEach(({ entries, title }) => {
         if (entries && entries.length > 0) {
           contentHTML += `
@@ -742,7 +805,7 @@ const HamaliBookSimple: React.FC = () => {
                 ${title}:
               </div>
           `;
-          
+
           entries.forEach((entry: any) => {
             contentHTML += `
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
@@ -752,11 +815,11 @@ const HamaliBookSimple: React.FC = () => {
               </div>
             `;
           });
-          
+
           contentHTML += `</div>`;
         }
       });
-      
+
       if (summary.otherHamaliEntries && Object.keys(summary.otherHamaliEntries).length > 0) {
         contentHTML += `
           <div style="margin-bottom: 15px;">
@@ -764,7 +827,7 @@ const HamaliBookSimple: React.FC = () => {
               Other Hamali Works:
             </div>
         `;
-        
+
         Object.entries(summary.otherHamaliEntries).forEach(([key, entry]: [string, any]) => {
           const description = entry.description ? ` - ${entry.description}` : '';
           contentHTML += `
@@ -775,16 +838,16 @@ const HamaliBookSimple: React.FC = () => {
             </div>
           `;
         });
-        
+
         contentHTML += `</div>`;
       }
-      
+
       // Calculate batch totals for paddy hamali
       const batchTotals = calculateBatchTotals(summary);
       const batchTotalsText = Object.entries(batchTotals)
         .map(([batch, total]) => `${batch}: ₹${(total as number).toFixed(0)}`)
         .join(', ');
-      
+
       contentHTML += `
         <div style="margin-top: 15px; padding-top: 10px; border-top: 2px solid #000; font-size: 14px; font-weight: bold;">
           <div style="display: flex; justify-content: space-between;">
@@ -798,7 +861,7 @@ const HamaliBookSimple: React.FC = () => {
         </div>
       `;
     }
-    
+
     // RICE HAMALI CONTENT
     if (activeTab === 'rice' && riceHamaliSummary) {
       if (riceHamaliSummary.riceHamaliEntries && Object.keys(riceHamaliSummary.riceHamaliEntries).length > 0) {
@@ -810,11 +873,11 @@ const HamaliBookSimple: React.FC = () => {
                   ${workType}:
                 </div>
             `;
-            
+
             entries.forEach((entry: any) => {
               const rate = entry.ratePerBag || entry.rateperbag || (entry.totalAmount / entry.bags) || 0;
               const varietyInfo = `Variety: ${entry.variety} | Location: ${entry.location}${entry.billNumber ? ` | Bill: ${entry.billNumber}` : ''}${entry.lorryNumber ? ` | Lorry: ${entry.lorryNumber}` : ''}${entry.productType ? ` | Type: ${entry.productType}` : ''}`;
-              
+
               contentHTML += `
                 <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
                   <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
@@ -828,12 +891,12 @@ const HamaliBookSimple: React.FC = () => {
                 </div>
               `;
             });
-            
+
             contentHTML += `</div>`;
           }
         });
       }
-      
+
       if (riceHamaliSummary.otherHamaliEntries && Object.keys(riceHamaliSummary.otherHamaliEntries).length > 0) {
         contentHTML += `
           <div style="margin-bottom: 15px;">
@@ -841,12 +904,12 @@ const HamaliBookSimple: React.FC = () => {
               Other Rice Work:
             </div>
         `;
-        
+
         Object.entries(riceHamaliSummary.otherHamaliEntries).forEach(([workType, entries]: [string, any]) => {
           entries.forEach((entry: any) => {
             const rate = entry.ratePerBag || entry.rateperbag || (entry.totalAmount / entry.bags) || 0;
             const varietyInfo = `Variety: ${entry.variety} | Location: ${entry.location}`;
-            
+
             contentHTML += `
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ddd; font-size: 11px;">
                 <div style="font-weight: bold; width: 80px;">₹${entry.totalAmount.toFixed(0)}</div>
@@ -861,15 +924,15 @@ const HamaliBookSimple: React.FC = () => {
             `;
           });
         });
-        
+
         contentHTML += `</div>`;
       }
-      
+
       const batchTotals = calculateRiceBatchTotals(riceHamaliSummary);
       const batchTotalsText = Object.entries(batchTotals)
         .map(([batch, total]) => `${batch}: ₹${total.toFixed(0)}`)
         .join(', ');
-      
+
       contentHTML += `
         <div style="margin-top: 15px; padding-top: 10px; border-top: 2px solid #000; font-size: 14px; font-weight: bold;">
           <div style="display: flex; justify-content: space-between;">
@@ -883,7 +946,7 @@ const HamaliBookSimple: React.FC = () => {
         </div>
       `;
     }
-    
+
     contentHTML += `</div>`;
     return contentHTML;
   };
@@ -945,19 +1008,28 @@ const HamaliBookSimple: React.FC = () => {
 
   const calculateRiceBatchTotals = (riceHamaliSummary: any) => {
     const batchTotals: { [key: string]: number } = {};
-    
+
     // Process rice hamali entries
     if (riceHamaliSummary.riceHamaliEntries) {
       Object.values(riceHamaliSummary.riceHamaliEntries).forEach((entries: any) => {
         entries.forEach((entry: any) => {
-          // For rice hamali, assume single worker entries, use Batch 1 as default
-          const batchKey = `Batch ${entry.batchNumber || 1}`;
-          const amount = parseFloat(entry.totalAmount || 0);
-          batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+          // ✅ FIX: Check if entry has splits array
+          if (entry.splits && entry.splits.length > 0) {
+            // Iterate splits for batch totals
+            entry.splits.forEach((split: any) => {
+              const batchKey = `Batch ${split.batchNumber || 1}`;
+              batchTotals[batchKey] = (batchTotals[batchKey] || 0) + (split.amount || 0);
+            });
+          } else {
+            // Legacy format
+            const batchKey = `Batch ${entry.batchNumber || 1}`;
+            const amount = parseFloat(entry.totalAmount || entry.totalamount || 0);
+            batchTotals[batchKey] = (batchTotals[batchKey] || 0) + amount;
+          }
         });
       });
     }
-    
+
     // Process other hamali entries
     if (riceHamaliSummary.otherHamaliEntries) {
       Object.values(riceHamaliSummary.otherHamaliEntries).forEach((entries: any) => {
@@ -968,17 +1040,17 @@ const HamaliBookSimple: React.FC = () => {
         });
       });
     }
-    
+
     return batchTotals;
   };
 
   const renderBatchTotals = (batchTotals: { [key: string]: number }) => {
     const batchEntries = Object.entries(batchTotals);
     if (batchEntries.length === 0) return null;
-    
+
     return (
-      <div style={{ 
-        fontSize: '0.875rem', 
+      <div style={{
+        fontSize: '0.875rem',
         color: '#666',
         marginTop: '0.25rem',
         display: 'flex',
@@ -986,7 +1058,7 @@ const HamaliBookSimple: React.FC = () => {
         gap: '1rem'
       }}>
         {batchEntries.map(([batch, total], index) => (
-          <span key={batch} style={{ 
+          <span key={batch} style={{
             background: '#f3f4f6',
             padding: '0.25rem 0.5rem',
             borderRadius: '4px',
@@ -995,7 +1067,7 @@ const HamaliBookSimple: React.FC = () => {
             {batch}: ₹{(total as number).toFixed(0)}
           </span>
         ))}
-        <span style={{ 
+        <span style={{
           background: '#e5e7eb',
           padding: '0.25rem 0.5rem',
           borderRadius: '4px',
@@ -1040,7 +1112,7 @@ const HamaliBookSimple: React.FC = () => {
     return (
       <Section>
         <SectionTitle>Other Hamali Works:</SectionTitle>
-        {Object.entries(riceHamaliSummary.otherHamaliEntries).map(([workType, entries]: [string, any]) => 
+        {Object.entries(riceHamaliSummary.otherHamaliEntries).map(([workType, entries]: [string, any]) =>
           entries.map((entry: any, index: number) => (
             <EntryRow key={`${workType}-${index}`}>
               <Amount>₹{entry.totalAmount.toFixed(0)}</Amount>
@@ -1073,24 +1145,24 @@ const HamaliBookSimple: React.FC = () => {
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
         />
-        {((activeTab === 'paddy' && summary && summary.totalEntries > 0) || 
+        {((activeTab === 'paddy' && summary && summary.totalEntries > 0) ||
           (activeTab === 'rice' && riceHamaliSummary && riceHamaliSummary.totalEntries > 0)) && (
-          <button
-            onClick={handleDownloadPDF}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: '#10b981',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              marginLeft: 'auto'
-            }}
-          >
-            📄 Download PDF
-          </button>
-        )}
+            <button
+              onClick={handleDownloadPDF}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                marginLeft: 'auto'
+              }}
+            >
+              📄 Download PDF
+            </button>
+          )}
       </FilterSection>
 
       {/* Paddy/Rice Tabs */}
@@ -1167,14 +1239,28 @@ const HamaliBookSimple: React.FC = () => {
                         </div>
                       </Details>
                       <SplitsInfo>
-                        <div>
-                          <SplitItem>
-                            <WorkerName>{entry.workerName}:</WorkerName>
-                            <WorkerDetails>
-                              🎯 {entry.bags} bags × ₹{(entry.ratePerBag || entry.rateperbag || (entry.totalAmount / entry.bags) || 0).toFixed(2)} = ₹{entry.totalAmount.toFixed(0)} 🎯
-                            </WorkerDetails>
-                          </SplitItem>
-                        </div>
+                        {/* ✅ FIX: Show ALL batch splits like Paddy Hamali! */}
+                        {entry.splits && entry.splits.length > 0 ? (
+                          <div>
+                            {entry.splits.map((split: any, splitIdx: number) => (
+                              <SplitItem key={splitIdx}>
+                                <WorkerName>Batch {split.batchNumber || (splitIdx + 1)}:</WorkerName>
+                                <WorkerDetails>
+                                  🎯 {split.bags} bags × ₹{split.rate.toFixed(2)} = ₹{split.amount.toFixed(0)} 🎯
+                                </WorkerDetails>
+                              </SplitItem>
+                            ))}
+                          </div>
+                        ) : (
+                          <div>
+                            <SplitItem>
+                              <WorkerName>{entry.workerName || 'Worker'}:</WorkerName>
+                              <WorkerDetails>
+                                🎯 {entry.bags} bags × ₹{(entry.ratePerBag || entry.rateperbag || (entry.totalAmount / entry.bags) || 0).toFixed(2)} = ₹{entry.totalAmount.toFixed(0)} 🎯
+                              </WorkerDetails>
+                            </SplitItem>
+                          </div>
+                        )}
                       </SplitsInfo>
                     </EntryRow>
                   ))}

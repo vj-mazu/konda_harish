@@ -3,11 +3,144 @@ const { auth } = require('../middleware/auth');
 const { sequelize } = require('../config/database');
 const router = express.Router();
 
+// Get pending rice hamali entries for approval (managers/admins only)
+router.get('/pending-list', auth, async (req, res) => {
+  try {
+    // Only managers and admins can view pending list
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ success: false, error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    // Check if rice_hamali_entries table exists first
+    const [tableExists] = await sequelize.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'rice_hamali_entries'
+    `);
+
+    if (tableExists.length === 0) {
+      return res.json({ success: true, entries: [] });
+    }
+
+    // Check if status column exists
+    const [statusColumn] = await sequelize.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'rice_hamali_entries' 
+      AND column_name = 'status'
+    `);
+
+    if (statusColumn.length === 0) {
+      // Status column doesn't exist yet - return empty array
+      console.log('⚠️ rice_hamali_entries status column not found, returning empty pending list');
+      return res.json({ success: true, entries: [] });
+    }
+
+    const [entries] = await sequelize.query(`
+      SELECT 
+        rhe.id,
+        rhe.rice_production_id,
+        rhe.rice_stock_movement_id,
+        rhe.rice_hamali_rate_id,
+        rhe.bags,
+        rhe.rate,
+        rhe.amount,
+        rhe.status,
+        rhe.remarks,
+        rhe.created_at as "createdAt",
+        rhr.work_type as "workType",
+        rhr.work_detail as "workDetail",
+        rp.date as "productionDate",
+        rp."productType" as "productType",
+        rsm.date as "movementDate",
+        rsm.movement_type as "movementType",
+        u.username as "creatorUsername",
+        u.role as "creatorRole"
+      FROM rice_hamali_entries rhe
+      LEFT JOIN rice_hamali_rates rhr ON rhe.rice_hamali_rate_id = rhr.id
+      LEFT JOIN rice_productions rp ON rhe.rice_production_id = rp.id
+      LEFT JOIN rice_stock_movements rsm ON rhe.rice_stock_movement_id = rsm.id
+      LEFT JOIN users u ON rhe.created_by = u.id
+      WHERE rhe.status = 'pending' AND rhe.is_active = true
+      ORDER BY rhe.created_at DESC
+    `);
+
+    res.json({ success: true, entries });
+  } catch (error) {
+    console.error('Get pending rice hamali entries error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch pending rice hamali entries' });
+  }
+});
+
+// Bulk approve rice hamali entries
+router.post('/bulk-approve', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ success: false, error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { entryIds } = req.body;
+    if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Entry IDs are required' });
+    }
+
+    await sequelize.query(`
+      UPDATE rice_hamali_entries 
+      SET status = 'approved', 
+          approved_by = :userId, 
+          approved_at = NOW(),
+          updated_at = NOW()
+      WHERE id IN (:ids) AND status = 'pending'
+    `, {
+      replacements: { userId: req.user.userId, ids: entryIds },
+      type: sequelize.QueryTypes.UPDATE
+    });
+
+    res.json({ success: true, message: `${entryIds.length} rice hamali entry/entries approved successfully` });
+  } catch (error) {
+    console.error('Bulk approve rice hamali entries error:', error);
+    res.status(500).json({ success: false, error: 'Failed to approve rice hamali entries' });
+  }
+});
+
+// Bulk reject rice hamali entries
+router.post('/bulk-reject', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'staff') {
+      return res.status(403).json({ success: false, error: 'Access denied. Manager or Admin role required.' });
+    }
+
+    const { entryIds, remarks } = req.body;
+    if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Entry IDs are required' });
+    }
+
+    await sequelize.query(`
+      UPDATE rice_hamali_entries 
+      SET status = 'rejected',
+          rejection_remarks = :remarks,
+          rejected_by = :userId,
+          rejected_at = NOW(),
+          updated_at = NOW()
+      WHERE id IN (:ids) AND status = 'pending'
+    `, {
+      replacements: { ids: entryIds, remarks: remarks || null, userId: req.user.userId },
+      type: sequelize.QueryTypes.UPDATE
+    });
+
+    res.json({ success: true, message: `${entryIds.length} rice hamali entry/entries rejected` });
+  } catch (error) {
+    console.error('Bulk reject rice hamali entries error:', error);
+    res.status(500).json({ success: false, error: 'Failed to reject rice hamali entries' });
+  }
+});
+
 // Get all rice hamali entries
 router.get('/', auth, async (req, res) => {
   try {
     const { riceProductionId } = req.query;
-    
+
     // Check if rice_hamali_entries table exists first
     const [tableExists] = await sequelize.query(`
       SELECT table_name 
@@ -23,10 +156,10 @@ router.get('/', auth, async (req, res) => {
         data: { entries: [] }
       });
     }
-    
+
     let whereClause = 'WHERE rhe.is_active = true';
     const replacements = {};
-    
+
     if (riceProductionId) {
       whereClause += ' AND rhe.rice_production_id = :riceProductionId';
       replacements.riceProductionId = riceProductionId;
@@ -66,9 +199,9 @@ router.get('/', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching rice hamali entries:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch rice hamali entries' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch rice hamali entries'
     });
   }
 });
@@ -77,14 +210,14 @@ router.get('/', auth, async (req, res) => {
 router.post('/batch', auth, async (req, res) => {
   try {
     const { riceProductionIds = [], stockMovementIds = [] } = req.body;
-    
-    console.log('🔍 Batch hamali request:', { 
-      riceProductionIds: riceProductionIds?.length || 0, 
-      stockMovementIds: stockMovementIds?.length || 0 
+
+    console.log('🔍 Batch hamali request:', {
+      riceProductionIds: riceProductionIds?.length || 0,
+      stockMovementIds: stockMovementIds?.length || 0
     });
-    
-    if ((!riceProductionIds || riceProductionIds.length === 0) && 
-        (!stockMovementIds || stockMovementIds.length === 0)) {
+
+    if ((!riceProductionIds || riceProductionIds.length === 0) &&
+      (!stockMovementIds || stockMovementIds.length === 0)) {
       console.log('ℹ️ No IDs provided for hamali batch fetch');
       return res.json({
         success: true,
@@ -109,7 +242,7 @@ router.post('/batch', auth, async (req, res) => {
     }
 
     const entries = {};
-    
+
     // Fetch entries for rice productions
     if (riceProductionIds && riceProductionIds.length > 0) {
       console.log('📊 Fetching hamali for rice productions:', riceProductionIds.length);
@@ -189,9 +322,9 @@ router.post('/batch', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching rice hamali entries batch:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch rice hamali entries' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch rice hamali entries'
     });
   }
 });
@@ -213,8 +346,8 @@ router.post('/bulk', auth, async (req, res) => {
     // Enhanced validation with detailed error messages
     if (!riceProductionId && !stockMovementId) {
       console.log('❌ Validation failed: No production or stock movement ID provided');
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         error: 'Either rice production ID or stock movement ID is required',
         code: 'MISSING_REFERENCE_ID'
       });
@@ -222,8 +355,8 @@ router.post('/bulk', auth, async (req, res) => {
 
     if (!entries || !Array.isArray(entries) || entries.length === 0) {
       console.log('❌ Validation failed: Invalid entries array');
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         error: 'Entries array is required and must contain at least one entry',
         code: 'INVALID_ENTRIES_ARRAY'
       });
@@ -252,12 +385,12 @@ router.post('/bulk', auth, async (req, res) => {
 
       totalBags = stockMovement[0].total_bags;
       referenceId = stockMovementId;
-      
-      console.log('✅ Stock movement validated:', { 
-        stockMovementId, 
-        movementType: stockMovement[0].movement_type, 
+
+      console.log('✅ Stock movement validated:', {
+        stockMovementId,
+        movementType: stockMovement[0].movement_type,
         date: stockMovement[0].date,
-        totalBags 
+        totalBags
       });
     } else {
       // Handle regular rice production
@@ -279,34 +412,34 @@ router.post('/bulk', auth, async (req, res) => {
 
       totalBags = riceProduction[0].total_bags;
       referenceId = riceProductionId;
-      
-      console.log('✅ Rice production validated:', { 
-        riceProductionId, 
+
+      console.log('✅ Rice production validated:', {
+        riceProductionId,
         date: riceProduction[0].date,
-        totalBags 
+        totalBags
       });
     }
 
     const transaction = await sequelize.transaction();
-    
+
     try {
       const createdEntries = [];
       console.log(`🔄 Creating ${entries.length} rice hamali entries...`);
-      
+
       for (const [index, entry] of entries.entries()) {
         const { workType, workDetail, rate, bags, workerName, batchNumber } = entry;
-        
+
         console.log(`  Processing entry ${index + 1}/${entries.length}:`, { workType, workDetail, bags });
-        
+
         // Enhanced validation for each entry
         if (!workType || !workDetail || !rate || !bags) {
           throw new Error(`Entry ${index + 1}: Missing required fields (workType, workDetail, rate, bags)`);
         }
-        
+
         if (bags <= 0) {
           throw new Error(`Entry ${index + 1}: Bags must be greater than 0`);
         }
-        
+
         // Find the rice hamali rate ID based on work type and detail
         const [rateResult] = await sequelize.query(`
           SELECT id, rate_24_27 FROM rice_hamali_rates 
@@ -336,11 +469,12 @@ router.post('/bulk', auth, async (req, res) => {
             rate,
             amount,
             remarks,
+            status,
             is_active,
             created_by,
             created_at,
             updated_at
-          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :rate, :amount, :remarks, true, :createdBy, NOW(), NOW())
+          ) VALUES (:riceProductionId, :stockMovementId, :entryType, :riceHamaliRateId, :bags, :rate, :amount, :remarks, :status, true, :createdBy, NOW(), NOW())
           RETURNING *
         `, {
           replacements: {
@@ -352,35 +486,36 @@ router.post('/bulk', auth, async (req, res) => {
             rate: actualRate,
             amount: bags * actualRate,
             remarks: `${workerName ? `Worker: ${workerName}, ` : ''}${batchNumber ? `Batch: ${batchNumber}, ` : ''}${movementType ? `Type: ${movementType}, ` : ''}Rate: ₹${rate}`,
+            status: req.user.role === 'staff' ? 'pending' : 'approved',
             createdBy: req.user.userId
           },
           transaction
         });
-        
+
         console.log(`    ✅ Entry ${index + 1} created with ID: ${result[0].id}`);
         createdEntries.push(result[0]);
       }
-      
+
       await transaction.commit();
       console.log(`🎉 Successfully created ${createdEntries.length} rice hamali entries`);
-      
+
       // Verify entries were saved by querying them back
       const entryIds = createdEntries.map(e => e.id);
       const [verificationResult] = await sequelize.query(`
         SELECT COUNT(*) as count FROM rice_hamali_entries WHERE id IN (${entryIds.join(',')})
       `);
-      
+
       console.log(`✅ Verification: ${verificationResult[0].count} entries confirmed in database`);
-      
+
       res.json({
         success: true,
         message: `${createdEntries.length} rice hamali entries created successfully`,
-        data: { 
+        data: {
           entries: createdEntries,
           verified: verificationResult[0].count === createdEntries.length
         }
       });
-      
+
     } catch (error) {
       await transaction.rollback();
       console.log('❌ Transaction rolled back due to error:', error.message);
@@ -389,9 +524,9 @@ router.post('/bulk', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Error creating bulk rice hamali entries:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to create rice hamali entries' 
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create rice hamali entries'
     });
   }
 });
@@ -452,8 +587,8 @@ router.post('/', auth, async (req, res) => {
 
     const [result] = await sequelize.query(`
       INSERT INTO rice_hamali_entries 
-      (rice_production_id, rice_hamali_rate_id, bags, remarks, created_by)
-      VALUES (:riceProductionId, :riceHamaliRateId, :bags, :remarks, :createdBy)
+      (rice_production_id, rice_hamali_rate_id, bags, remarks, status, created_by)
+      VALUES (:riceProductionId, :riceHamaliRateId, :bags, :remarks, :status, :createdBy)
       RETURNING *
     `, {
       replacements: {
@@ -461,6 +596,7 @@ router.post('/', auth, async (req, res) => {
         riceHamaliRateId,
         bags,
         remarks: remarks || null,
+        status: req.user.role === 'staff' ? 'pending' : 'approved',
         createdBy: req.user.userId
       }
     });
@@ -472,9 +608,9 @@ router.post('/', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding rice hamali entry:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to add rice hamali entry' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add rice hamali entry'
     });
   }
 });
@@ -515,9 +651,9 @@ router.put('/:id', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating rice hamali entry:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to update rice hamali entry' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update rice hamali entry'
     });
   }
 });
@@ -549,9 +685,9 @@ router.delete('/:id', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting rice hamali entry:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to delete rice hamali entry' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete rice hamali entry'
     });
   }
 });
@@ -560,7 +696,7 @@ router.delete('/:id', auth, async (req, res) => {
 router.get('/summary/:date', auth, async (req, res) => {
   try {
     const { date } = req.params;
-    
+
     // Check if rice_hamali_entries table exists first
     const [tableExists] = await sequelize.query(`
       SELECT table_name 
@@ -738,7 +874,7 @@ router.get('/summary/:date', auth, async (req, res) => {
     allEntries.forEach(entry => {
       // Create unique key for each hamali entry group 
       const entryKey = `${entry.rice_production_id || entry.rice_stock_movement_id}-${entry.work_type}-${entry.work_detail}-${entry.rate_18_21}-${Math.floor(new Date(entry.created_at).getTime() / 10000)}`;
-      
+
       if (!entryGroups[entryKey]) {
         entryGroups[entryKey] = {
           workType: entry.work_type,
@@ -762,7 +898,7 @@ router.get('/summary/:date', auth, async (req, res) => {
       // Add to totals
       entryGroups[entryKey].totalBags += entry.bags;
       entryGroups[entryKey].totalAmount += (entry.rate_18_21 || 0) * entry.bags;
-      
+
       // Add split information
       entryGroups[entryKey].splits.push({
         workerName: entry.worker_name || entry.created_by_username || 'Main Entry',
@@ -783,9 +919,9 @@ router.get('/summary/:date', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching rice hamali summary:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch rice hamali summary' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch rice hamali summary'
     });
   }
 });

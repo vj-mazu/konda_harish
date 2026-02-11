@@ -4,7 +4,9 @@ const { auth, authorize } = require('../middleware/auth');
 const PurchaseRate = require('../models/PurchaseRate');
 const Arrival = require('../models/Arrival');
 const User = require('../models/User');
-const { Kunchinittu } = require('../models/Location');
+const { Kunchinittu, Warehouse } = require('../models/Location');
+const Outturn = require('../models/Outturn');
+const { sequelize } = require('../config/database');
 
 const router = express.Router();
 
@@ -40,6 +42,7 @@ const calculateKunchinintuAverageRate = async (kunchinintuId) => {
       WHERE a.to_kunchinittu_id = :kunchinintuId
         AND a.movement_type = 'purchase'
         AND a.status = 'approved'
+        AND pr.status = 'approved'
         AND a.admin_approved_by IS NOT NULL
     `, {
       replacements: { kunchinintuId },
@@ -244,7 +247,7 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
     // 7. Total Amount = Base Rate Amount (on Sute Net Weight) + Adjustments (on Original Weight)
     // For MDL and MDWB: If H is negative (user signal to exclude), set to 0. If positive, add it.
     // For CDL and CDWB: Use H value as-is
-    const hContribution = ['MDL', 'MDWB'].includes(rateType) 
+    const hContribution = ['MDL', 'MDWB'].includes(rateType)
       ? (hAmount < 0 ? 0 : hAmount)  // MDL/MDWB: negative = 0, positive = add
       : hAmount;                      // CDL/CDWB: use as-is
     const totalAmount = baseRateAmount + hContribution + bAmount + lfAmount + egbAmount;
@@ -285,15 +288,19 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
     // Check if rate already exists
     const existingRate = await PurchaseRate.findOne({ where: { arrivalId } });
 
+    // Status based on role: admin = approved, manager = pending
+    const rateStatus = req.user.role === 'admin' ? 'approved' : 'pending';
+    const adminApprovedBy = req.user.role === 'admin' ? req.user.userId : null;
+    const adminApprovedAt = req.user.role === 'admin' ? new Date() : null;
+
     let purchaseRate;
     let created = false;
 
     if (existingRate) {
       // Update existing rate
       console.log(`📝 Updating existing rate for arrival ${arrivalId}`);
-      console.log(`   Old Total Amount: ₹${existingRate.totalAmount}`);
-      console.log(`   New Total Amount: ₹${parseFloat(totalAmount.toFixed(2))}`);
-      
+      console.log(`   Old Status: ${existingRate.status}, New Status: ${rateStatus}`);
+
       await existingRate.update({
         sute: suteNum,
         suteCalculationMethod,
@@ -310,13 +317,17 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
         amountFormula,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
         averageRate: parseFloat(averageRate.toFixed(2)),
-        updatedBy: req.user.userId
+        updatedBy: req.user.userId,
+        status: rateStatus,
+        adminApprovedBy,
+        adminApprovedAt
       });
       purchaseRate = existingRate;
-      console.log(`✅ Rate updated successfully`);
+      console.log(`✅ Rate updated successfully with status: ${rateStatus}`);
     } else {
       // Create new rate
       console.log(`✨ Creating new rate for arrival ${arrivalId}`);
+
       purchaseRate = await PurchaseRate.create({
         arrivalId,
         sute: suteNum,
@@ -334,10 +345,13 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
         amountFormula,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
         averageRate: parseFloat(averageRate.toFixed(2)),
-        createdBy: req.user.userId
+        createdBy: req.user.userId,
+        status: rateStatus,
+        adminApprovedBy,
+        adminApprovedAt
       });
       created = true;
-      console.log(`✅ Rate created successfully`);
+      console.log(`✅ Rate created successfully with status: ${rateStatus}`);
     }
 
     // Fetch the complete record with associations
@@ -350,9 +364,12 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
     });
 
     // Automatically calculate and update kunchinittu average rate
+    // ONLY if the rate is approved by admin
     try {
-      if (arrival.toKunchinintuId) {
+      if (arrival.toKunchinintuId && purchaseRate.status === 'approved') {
         await calculateKunchinintuAverageRate(arrival.toKunchinintuId);
+      } else if (purchaseRate.status === 'pending') {
+        console.log(`⏳ Rate is pending admin approval - kunchinittu average rate not calculated yet`);
       }
     } catch (error) {
       console.error('Error updating kunchinittu average rate:', error);
@@ -368,6 +385,82 @@ router.post('/', auth, authorize('manager', 'admin'), async (req, res) => {
     console.error('Error details:', error.message);
     console.error('Request body:', req.body);
     res.status(500).json({ error: error.message || 'Failed to save purchase rate' });
+  }
+});
+
+// GET /api/purchase-rates/pending-list - Get pending purchase rates for admin approval (Admin only)
+// IMPORTANT: This route must be defined BEFORE /:arrivalId to avoid matching 'pending-list' as arrivalId
+router.get('/pending-list', auth, authorize('admin'), async (req, res) => {
+  try {
+    const pendingRates = await PurchaseRate.findAll({
+      where: { status: 'pending' },
+      include: [
+        { model: User, as: 'creator', attributes: ['username', 'role'] }
+      ],
+      order: [['createdAt', 'ASC']]
+    });
+
+    // Fetch arrival data separately to avoid association issues
+    const arrivalIds = pendingRates.map(r => r.arrivalId).filter(id => id);
+    const arrivals = await Arrival.findAll({
+      where: { id: arrivalIds },
+      attributes: ['id', 'slNo', 'date', 'variety', 'bags', 'netWeight', 'grossWeight', 'tareWeight', 'broker', 'fromLocation', 'movementType', 'moisture', 'cutting', 'lorryNumber', 'wbNo', 'toKunchinintuId', 'outturnId', 'toWarehouseId']
+    });
+
+    // Fetch Kunchinittu names
+    const kunchinittuIds = arrivals.map(a => a.toKunchinintuId).filter(id => id);
+    const kunchinittus = kunchinittuIds.length > 0 ? await Kunchinittu.findAll({
+      where: { id: kunchinittuIds },
+      attributes: ['id', 'name', 'code']
+    }) : [];
+
+    // Fetch Warehouse names
+    const warehouseIds = arrivals.map(a => a.toWarehouseId).filter(id => id);
+    const warehouses = warehouseIds.length > 0 ? await Warehouse.findAll({
+      where: { id: warehouseIds },
+      attributes: ['id', 'name', 'code']
+    }) : [];
+
+    // Fetch Outturn names
+    const outturnIds = arrivals.map(a => a.outturnId).filter(id => id);
+    const outturns = outturnIds.length > 0 ? await Outturn.findAll({
+      where: { id: outturnIds },
+      attributes: ['id', 'code', 'allottedVariety']
+    }) : [];
+
+    const kunchinittuMap = {};
+    kunchinittus.forEach(k => { kunchinittuMap[k.id] = k; });
+
+    const warehouseMap = {};
+    warehouses.forEach(w => { warehouseMap[w.id] = w; });
+
+    const outturnMap = {};
+    outturns.forEach(o => { outturnMap[o.id] = o; });
+
+    const arrivalMap = {};
+    arrivals.forEach(a => {
+      const arrivalJson = a.toJSON();
+      arrivalJson.toKunchinittu = kunchinittuMap[a.toKunchinintuId] || null;
+      arrivalJson.toWarehouse = warehouseMap[a.toWarehouseId] || null;
+      arrivalJson.outturn = outturnMap[a.outturnId] || null;
+      arrivalMap[a.id] = arrivalJson;
+    });
+
+    // Attach arrival data to rates
+    const ratesWithArrival = pendingRates.map(rate => {
+      const rateJson = rate.toJSON();
+      rateJson.arrival = arrivalMap[rate.arrivalId] || null;
+      return rateJson;
+    });
+
+    res.json({
+      count: ratesWithArrival.length,
+      rates: ratesWithArrival,
+      role: req.user.role
+    });
+  } catch (error) {
+    console.error('Get pending purchase rates error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending purchase rates', details: error.message });
   }
 });
 
@@ -388,6 +481,187 @@ router.get('/:arrivalId', auth, async (req, res) => {
   } catch (error) {
     console.error('Fetch purchase rate error:', error);
     res.status(500).json({ error: 'Failed to fetch purchase rate' });
+  }
+});
+
+// POST /api/purchase-rates/:id/admin-approve - Approve purchase rate (Admin only)
+router.post('/:id/admin-approve', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const purchaseRate = await PurchaseRate.findByPk(id, {
+      include: [{ model: Arrival, as: 'arrival' }]
+    });
+
+    if (!purchaseRate) {
+      return res.status(404).json({ error: 'Purchase rate not found' });
+    }
+
+    if (purchaseRate.status !== 'pending') {
+      return res.status(400).json({ error: 'Purchase rate is not pending' });
+    }
+
+    await purchaseRate.update({
+      status: 'approved',
+      adminApprovedBy: req.user.userId,
+      adminApprovedAt: new Date()
+    });
+
+    // Now calculate kunchinittu average rate
+    try {
+      if (purchaseRate.arrival && purchaseRate.arrival.toKunchinintuId) {
+        await calculateKunchinintuAverageRate(purchaseRate.arrival.toKunchinintuId);
+        console.log(`✅ Kunchinittu average rate updated after admin approval`);
+      }
+    } catch (error) {
+      console.error('Error updating kunchinittu average rate after approval:', error);
+    }
+
+    res.json({
+      message: 'Purchase rate approved successfully',
+      purchaseRate
+    });
+  } catch (error) {
+    console.error('Approve purchase rate error:', error);
+    res.status(500).json({ error: 'Failed to approve purchase rate' });
+  }
+});
+
+// POST /api/purchase-rates/:id/reject - Reject purchase rate (Admin only)
+router.post('/:id/reject', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { remarks } = req.body;
+
+    const purchaseRate = await PurchaseRate.findByPk(id);
+
+    if (!purchaseRate) {
+      return res.status(404).json({ error: 'Purchase rate not found' });
+    }
+
+    if (purchaseRate.status !== 'pending') {
+      return res.status(400).json({ error: 'Purchase rate is not pending' });
+    }
+
+    await purchaseRate.update({
+      status: 'rejected'
+    });
+
+    res.json({
+      message: 'Purchase rate rejected',
+      purchaseRate
+    });
+  } catch (error) {
+    console.error('Reject purchase rate error:', error);
+    res.status(500).json({ error: 'Failed to reject purchase rate' });
+  }
+});
+
+// POST /api/purchase-rates/bulk-approve - Bulk approve purchase rates (Admin only)
+router.post('/bulk-approve', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { rateIds } = req.body;
+
+    if (!rateIds || !Array.isArray(rateIds) || rateIds.length === 0) {
+      return res.status(400).json({ error: 'rateIds array is required' });
+    }
+
+    const results = { approved: [], failed: [] };
+
+    for (const id of rateIds) {
+      try {
+        const purchaseRate = await PurchaseRate.findByPk(id, {
+          include: [{ model: Arrival, as: 'arrival' }]
+        });
+
+        if (!purchaseRate) {
+          results.failed.push({ id, reason: 'Not found' });
+          continue;
+        }
+
+        if (purchaseRate.status !== 'pending') {
+          results.failed.push({ id, reason: 'Not pending' });
+          continue;
+        }
+
+        await purchaseRate.update({
+          status: 'approved',
+          adminApprovedBy: req.user.userId,
+          adminApprovedAt: new Date()
+        });
+
+        // Calculate kunchinittu average rate
+        if (purchaseRate.arrival && purchaseRate.arrival.toKunchinintuId) {
+          await calculateKunchinintuAverageRate(purchaseRate.arrival.toKunchinintuId);
+        }
+
+        results.approved.push(id);
+      } catch (error) {
+        results.failed.push({ id, reason: error.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk approval completed: ${results.approved.length} approved, ${results.failed.length} failed`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk approve purchase rates error:', error);
+    res.status(500).json({ error: 'Failed to bulk approve purchase rates' });
+  }
+});
+
+// POST /api/purchase-rates/bulk-reject - Bulk reject purchase rates (Admin only)
+router.post('/bulk-reject', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { rateIds, remarks } = req.body;
+
+    if (!rateIds || !Array.isArray(rateIds) || rateIds.length === 0) {
+      return res.status(400).json({ error: 'rateIds array is required' });
+    }
+
+    const results = { rejected: [], failed: [] };
+
+    for (const id of rateIds) {
+      try {
+        const purchaseRate = await PurchaseRate.findByPk(id);
+
+        if (!purchaseRate) {
+          results.failed.push({ id, reason: 'Not found' });
+          continue;
+        }
+
+        if (purchaseRate.status !== 'pending') {
+          results.failed.push({ id, reason: 'Not pending' });
+          continue;
+        }
+
+        await purchaseRate.update({
+          status: 'rejected',
+          sute: 0,
+          baseRate: 0,
+          h: 0,
+          b: 0,
+          lf: 0,
+          egb: 0,
+          totalAmount: 0,
+          averageRate: 0,
+          amountFormula: 'REJECTED'
+        });
+
+        results.rejected.push(id);
+      } catch (error) {
+        results.failed.push({ id, reason: error.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk rejection completed: ${results.rejected.length} rejected, ${results.failed.length} failed`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk reject purchase rates error:', error);
+    res.status(500).json({ error: 'Failed to bulk reject purchase rates' });
   }
 });
 
