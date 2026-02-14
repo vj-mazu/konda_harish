@@ -7,9 +7,11 @@ const router = express.Router();
 // Get hamali book entries (both paddy and rice hamali)
 router.get('/', auth, async (req, res) => {
     try {
-        const { dateFrom, dateTo, year, month } = req.query;
+        const { dateFrom, dateTo, year, month, page = 1, limit = 500 } = req.query;
+        const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+        const limitVal = Number.parseInt(limit);
 
-        console.log('📋 Hamali book request params:', { dateFrom, dateTo, year, month });
+        console.log('📋 Hamali book request params:', { dateFrom, dateTo, year, month, page, limit });
 
         // Build date filter for arrivals (for paddy hamali)
         let arrivalDateFilter = '';
@@ -48,10 +50,14 @@ router.get('/', auth, async (req, res) => {
             
             WHERE phe.arrival_id IS NOT NULL ${arrivalDateFilter}
             ORDER BY a.date DESC, phe.created_at DESC
+            LIMIT :limitVal OFFSET :offset
         `;
 
         console.log('📋 Executing paddy hamali query...');
-        const paddyHamaliResult = await sequelize.query(paddyHamaliQuery, { type: sequelize.QueryTypes.SELECT });
+        const paddyHamaliResult = await sequelize.query(paddyHamaliQuery, {
+            replacements: { limitVal, offset },
+            type: sequelize.QueryTypes.SELECT
+        });
         console.log('✅ Paddy hamali query successful, found:', paddyHamaliResult.length, 'entries');
 
         // Build date filter for rice productions AND stock movements (for rice hamali)
@@ -178,10 +184,14 @@ router.get('/', auth, async (req, res) => {
             AND rhe.remarks NOT ILIKE '%Auto-created%'
             ${productionDateFilter}
             ORDER BY COALESCE(rp.date, rsm.date) DESC, rhe.created_at DESC
+            LIMIT :limitVal OFFSET :offset
         `;
 
         console.log('📋 Executing rice hamali query...');
-        const riceHamaliResult = await sequelize.query(riceHamaliQuery, { type: sequelize.QueryTypes.SELECT });
+        const riceHamaliResult = await sequelize.query(riceHamaliQuery, {
+            replacements: { limitVal, offset },
+            type: sequelize.QueryTypes.SELECT
+        });
         console.log('✅ Rice hamali query successful, found:', riceHamaliResult.length, 'entries');
 
         // 🔍 DEBUG: Check for duplicate IDs in raw results
@@ -346,10 +356,14 @@ router.get('/', auth, async (req, res) => {
             WHERE ohe.arrival_id IS NOT NULL 
             ${otherDateFilter.replace(/WHERE/g, 'AND').replace(/rsm\.date/g, 'NULL').replace(/rp\.date/g, 'NULL')}
             ORDER BY ohe.created_at DESC
+            LIMIT :limitVal OFFSET :offset
         `;
 
         console.log('📋 Executing other hamali query...');
-        const otherHamaliResult = await sequelize.query(otherHamaliQuery, { type: sequelize.QueryTypes.SELECT });
+        const otherHamaliResult = await sequelize.query(otherHamaliQuery, {
+            replacements: { limitVal, offset },
+            type: sequelize.QueryTypes.SELECT
+        });
         console.log('✅ Other hamali query successful, found:', otherHamaliResult.length, 'entries');
 
         // TASK 3: Calculate totals with categorized rice hamali

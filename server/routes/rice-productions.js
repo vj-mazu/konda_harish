@@ -141,7 +141,8 @@ router.get('/pending-list', auth, async (req, res) => {
         { model: Packaging, as: 'packaging', attributes: ['brandName', 'code', 'allottedKg'] },
         { model: User, as: 'creator', attributes: ['username', 'role'] }
       ],
-      order: [['date', 'DESC'], ['createdAt', 'DESC']]
+      order: [['date', 'DESC'], ['createdAt', 'DESC']],
+      limit: 500
     });
 
     res.json({ productions });
@@ -625,33 +626,6 @@ router.post('/:id/approve', auth, authorize('manager', 'admin'), async (req, res
   } catch (error) {
     console.error('Approve rice production error:', error);
     res.status(500).json({ error: 'Failed to approve rice production entry' });
-  }
-});
-
-// Get pending rice production list (Manager/Admin only)
-router.get('/pending-list', auth, authorize('manager', 'admin'), async (req, res) => {
-  try {
-    const where = { status: 'pending' };
-
-    const productions = await RiceProduction.findAll({
-      where,
-      include: [
-        { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety', 'type'] },
-        { model: Packaging, as: 'packaging', attributes: ['brandName', 'code', 'allottedKg'] },
-        { model: User, as: 'creator', attributes: ['username', 'role'] }
-      ],
-      order: [['date', 'ASC'], ['createdAt', 'ASC']],
-      limit: 500
-    });
-
-    res.json({
-      count: productions.length,
-      productions,
-      role: req.user.role
-    });
-  } catch (error) {
-    console.error('Get pending rice production list error:', error);
-    res.status(500).json({ error: 'Failed to fetch pending rice productions' });
   }
 });
 

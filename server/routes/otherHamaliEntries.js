@@ -34,7 +34,8 @@ router.get('/arrival/:arrivalId', auth, async (req, res) => {
           attributes: ['id', 'username']
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: 500
     });
 
     const total = entries.reduce((sum, entry) => sum + parseFloat(entry.amount), 0);
@@ -572,7 +573,8 @@ router.get('/summary/:date', auth, async (req, res) => {
             ]
           }
         ],
-        order: [['workType', 'ASC'], ['workerName', 'ASC']]
+        order: [['workType', 'ASC'], ['workerName', 'ASC']],
+        limit: 1000
       });
 
       // Group paddy other hamali entries

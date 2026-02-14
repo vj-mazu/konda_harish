@@ -33,9 +33,9 @@ const calculateKunchinintuAverageRate = async (kunchinintuId) => {
 
     // First, let's check what arrivals exist
     const debugArrivals = await sequelize.query(`
-      SELECT id, movement_type, status, admin_approved_by, net_weight
+      SELECT id, "movementType", status, "adminApprovedBy", "netWeight"
       FROM arrivals 
-      WHERE to_kunchinittu_id = :kunchinintuId
+      WHERE "toKunchinintuId" = :kunchinintuId
     `, {
       replacements: { kunchinintuId },
       type: QueryTypes.SELECT
@@ -52,23 +52,23 @@ const calculateKunchinintuAverageRate = async (kunchinintuId) => {
       `, {
         replacements: { arrivalIds },
         type: QueryTypes.SELECT
-      });
+      });  // purchase_rates uses snake_case columns — this is correct
       console.log(`🔍 DEBUG: Found ${debugPurchaseRates.length} purchase rates:`, debugPurchaseRates);
     }
 
     const [result] = await sequelize.query(`
       SELECT 
         COALESCE(
-          SUM(pr.total_amount) / NULLIF(SUM(a.net_weight), 0) * 75, 
+          SUM(pr.total_amount) / NULLIF(SUM(CAST(a."netWeight" AS FLOAT)), 0) * 75, 
           0
         ) as avg_rate,
         COUNT(*) as record_count,
         SUM(pr.total_amount) as total_amount,
-        SUM(a.net_weight) as total_weight
+        SUM(CAST(a."netWeight" AS FLOAT)) as total_weight
       FROM arrivals a
       INNER JOIN purchase_rates pr ON a.id = pr.arrival_id
-      WHERE a.to_kunchinittu_id = :kunchinintuId
-        AND a.movement_type = 'purchase'
+      WHERE a."toKunchinintuId" = :kunchinintuId
+        AND a."movementType" = 'purchase'
     `, {
       replacements: { kunchinintuId },
       type: QueryTypes.SELECT

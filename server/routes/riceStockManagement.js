@@ -90,8 +90,32 @@ router.get('/movements', auth, async (req, res) => {
             where.status = approvalStatus;
         }
 
-        // Execute query with pagination
+        // Execute query with pagination — PARAMETERIZED for security
         const offset = (parseInt(page) - 1) * parseInt(limit);
+
+        // Build parameterized WHERE clause
+        const conditions = [];
+        const replacements = {};
+
+        if (where.date) {
+            const dateObj = where.date;
+            if (dateObj[Op.gte]) { conditions.push('rsm.date >= :dateGte'); replacements.dateGte = dateObj[Op.gte]; }
+            if (dateObj[Op.lte]) { conditions.push('rsm.date <= :dateLte'); replacements.dateLte = dateObj[Op.lte]; }
+            if (dateObj[Op.and]) {
+                dateObj[Op.and].forEach((cond, i) => {
+                    if (cond[Op.gte]) { conditions.push(`rsm.date >= :dateAndGte${i}`); replacements[`dateAndGte${i}`] = cond[Op.gte]; }
+                    if (cond[Op.lte]) { conditions.push(`rsm.date <= :dateAndLte${i}`); replacements[`dateAndLte${i}`] = cond[Op.lte]; }
+                });
+            }
+        }
+        if (where.movement_type) { conditions.push('rsm.movement_type = :movementType'); replacements.movementType = where.movement_type; }
+        if (where.product_type) { conditions.push('rsm.product_type = :productType'); replacements.productType = where.product_type; }
+        if (where.status) { conditions.push('rsm.status = :status'); replacements.status = where.status; }
+
+        const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
+
+        replacements.limitVal = parseInt(limit);
+        replacements.offsetVal = offset;
 
         const result = await sequelize.query(`
             SELECT 
@@ -127,32 +151,11 @@ router.get('/movements', auth, async (req, res) => {
             LEFT JOIN packagings p1 ON rsm.packaging_id = p1.id
             LEFT JOIN packagings p2 ON rsm.source_packaging_id = p2.id
             LEFT JOIN packagings p3 ON rsm.target_packaging_id = p3.id
-            WHERE ${Object.keys(where).length > 0 ?
-                Object.keys(where).map(key => {
-                    if (key === 'date' && typeof where[key] === 'object') {
-                        const dateObj = where[key];
-                        const conditions = [];
-
-                        // Handle simple object (Op.gte, Op.lte)
-                        if (dateObj[Op.gte]) conditions.push(`rsm.date >= '${dateObj[Op.gte]}'`);
-                        if (dateObj[Op.lte]) conditions.push(`rsm.date <= '${dateObj[Op.lte]}'`);
-
-                        // Handle Op.and (array of objects)
-                        if (dateObj[Op.and]) {
-                            dateObj[Op.and].forEach(cond => {
-                                if (cond[Op.gte]) conditions.push(`rsm.date >= '${cond[Op.gte]}'`);
-                                if (cond[Op.lte]) conditions.push(`rsm.date <= '${cond[Op.lte]}'`);
-                            });
-                        }
-
-                        return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
-                    }
-                    return `rsm.${key} = '${where[key]}'`;
-                }).join(' AND ') : '1=1'
-            }
+            WHERE ${whereClause}
             ORDER BY rsm.date DESC, rsm.created_at DESC
-            LIMIT ${parseInt(limit)} OFFSET ${offset}
+            LIMIT :limitVal OFFSET :offsetVal
         `, {
+            replacements,
             type: sequelize.QueryTypes.SELECT
         });
 
@@ -164,28 +167,9 @@ router.get('/movements', auth, async (req, res) => {
             const countResult = await sequelize.query(`
                 SELECT COUNT(*) as total
                 FROM rice_stock_movements rsm
-                WHERE ${Object.keys(where).length > 0 ?
-                    Object.keys(where).map(key => {
-                        if (key === 'date' && typeof where[key] === 'object') {
-                            const dateObj = where[key];
-                            const conditions = [];
-
-                            if (dateObj[Op.gte]) conditions.push(`rsm.date >= '${dateObj[Op.gte]}'`);
-                            if (dateObj[Op.lte]) conditions.push(`rsm.date <= '${dateObj[Op.lte]}'`);
-
-                            if (dateObj[Op.and]) {
-                                dateObj[Op.and].forEach(cond => {
-                                    if (cond[Op.gte]) conditions.push(`rsm.date >= '${cond[Op.gte]}'`);
-                                    if (cond[Op.lte]) conditions.push(`rsm.date <= '${cond[Op.lte]}'`);
-                                });
-                            }
-
-                            return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
-                        }
-                        return `rsm.${key} = '${where[key]}'`;
-                    }).join(' AND ') : '1=1'
-                }
+                WHERE ${whereClause}
             `, {
+                replacements,
                 type: sequelize.QueryTypes.SELECT
             });
             total = parseInt(countResult[0].total);

@@ -38,12 +38,64 @@ const Logo = styled(Link)`
   }
 `;
 
-const NavLinks = styled.div`
+const HamburgerButton = styled.button`
+  display: none;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  line-height: 1;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  @media (max-width: 768px) {
+    display: block;
+  }
+`;
+
+const MobileOverlay = styled.div<{ $open: boolean }>`
+  display: none;
+  @media (max-width: 768px) {
+    display: ${props => props.$open ? 'block' : 'none'};
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 999;
+  }
+`;
+
+const NavLinks = styled.div<{ $mobileOpen?: boolean }>`
   display: flex;
   gap: 0.25rem;
   align-items: center;
   flex: 1;
   justify-content: flex-end;
+
+  @media (max-width: 768px) {
+    position: fixed;
+    top: 0;
+    right: ${props => props.$mobileOpen ? '0' : '-280px'};
+    width: 280px;
+    height: 100vh;
+    background: linear-gradient(180deg, #10b981, #047857);
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 3.5rem 1rem 1rem;
+    gap: 0.15rem;
+    z-index: 1001;
+    overflow-y: auto;
+    transition: right 0.3s ease;
+    box-shadow: ${props => props.$mobileOpen ? '-4px 0 20px rgba(0,0,0,0.3)' : 'none'};
+  }
 `;
 
 const NavLink = styled(Link) <{ $active: boolean }>`
@@ -194,6 +246,7 @@ const Navbar: React.FC = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
   const [ledgersDropdownOpen, setLedgersDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const ledgersRef = useRef<HTMLDivElement>(null);
   const workflowRef = useRef<HTMLDivElement>(null);
 
@@ -211,10 +264,11 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdowns on route change
+  // Close all dropdowns + mobile menu on route change
   useEffect(() => {
     setLedgersDropdownOpen(false);
     setWorkflowDropdownOpen(false);
+    setMobileMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -262,7 +316,11 @@ const Navbar: React.FC = () => {
     <Nav>
       <NavContainer>
         <Logo to="/dashboard">Mother India Management</Logo>
-        <NavLinks>
+        <HamburgerButton onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? '✕' : '☰'}
+        </HamburgerButton>
+        <MobileOverlay $open={mobileMenuOpen} onClick={() => setMobileMenuOpen(false)} />
+        <NavLinks $mobileOpen={mobileMenuOpen}>
           <NavLink to="/dashboard" $active={isActive('/dashboard')}>Dashboard</NavLink>
           <NavLink to="/arrivals" $active={isActive('/arrivals')}>Arrivals</NavLink>
           <NavLink to="/records" $active={isActive('/records')}>Records</NavLink>

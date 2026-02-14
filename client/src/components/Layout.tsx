@@ -18,6 +18,14 @@ const MainContent = styled.main`
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+  }
 `;
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {

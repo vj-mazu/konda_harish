@@ -64,6 +64,7 @@ router.get('/pending-list', auth, async (req, res) => {
       LEFT JOIN users u ON rhe.created_by = u.id
       WHERE rhe.status = 'pending' AND rhe.is_active = true
       ORDER BY rhe.created_at DESC
+      LIMIT 500
     `);
 
     res.json({ success: true, entries });
@@ -139,7 +140,9 @@ router.post('/bulk-reject', auth, async (req, res) => {
 // Get all rice hamali entries
 router.get('/', auth, async (req, res) => {
   try {
-    const { riceProductionId } = req.query;
+    const { riceProductionId, page = 1, limit = 500 } = req.query;
+    const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const limitVal = Number.parseInt(limit);
 
     // Check if rice_hamali_entries table exists first
     const [tableExists] = await sequelize.query(`
@@ -189,8 +192,9 @@ router.get('/', auth, async (req, res) => {
       LEFT JOIN users u ON rhe.created_by = u.id
       ${whereClause}
       ORDER BY rhe.created_at DESC
+      LIMIT :limitVal OFFSET :offset
     `, {
-      replacements
+      replacements: { ...replacements, limitVal, offset }
     });
 
     res.json({

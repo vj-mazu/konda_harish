@@ -26,7 +26,8 @@ router.get('/pending-list', auth, async (req, res) => {
         },
         { model: User, as: 'addedByUser', attributes: ['id', 'username', 'role'] }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: 500
     });
 
     res.json({ entries });
@@ -427,15 +428,16 @@ router.put('/:id/approve', auth, authorize('manager', 'admin'), async (req, res)
 // Note: Authorization temporarily disabled - all authenticated users can access
 router.get('/book', auth, async (req, res) => {
   try {
-    const { dateFrom, dateTo, workType } = req.query;
+    const { dateFrom, dateTo, workType, page = 1, limit = 500 } = req.query;
+    const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const limitVal = Number.parseInt(limit);
 
     console.log('📖 Hamali Book Request:', {
       dateFrom,
       dateTo,
       workType,
-      user: req.user,
-      userId: req.user?.userId,
-      userRole: req.user?.role
+      page,
+      limit
     });
 
     const where = { status: 'approved' };
@@ -537,7 +539,9 @@ router.get('/book', auth, async (req, res) => {
     const entries = await PaddyHamaliEntry.findAll({
       where,
       include,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: limitVal,
+      offset: offset
     });
 
     console.log(`✅ Found ${entries.length} hamali entries`);

@@ -1,5 +1,6 @@
 const express = require('express');
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
+const { sequelize } = require('../config/database');
 const { auth, authorize } = require('../middleware/auth');
 const Arrival = require('../models/Arrival');
 const { Warehouse, Kunchinittu, Variety } = require('../models/Location');
@@ -11,9 +12,10 @@ const PDFDocument = require('pdfkit');
 
 const router = express.Router();
 
-// Get Kunchinittu Ledger
+// Get Kunchinittu Ledger — OPTIMIZED: Separate inward/outward queries + SQL aggregation
 router.get('/kunchinittu/:id', auth, async (req, res) => {
   try {
+    const startTime = Date.now();
     const { id } = req.params;
     const { dateFrom, dateTo, page = 1, limit = 250 } = req.query;
 
@@ -34,138 +36,209 @@ router.get('/kunchinittu/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Kunchinittu not found' });
     }
 
-    const where = {
-      [Op.or]: [
-        { toKunchinintuId: id }, // Inward (Purchase + Shifting in)
-        { fromKunchinintuId: id } // Outward (Shifting out)
-      ],
-      status: 'approved',
-      adminApprovedBy: { [Op.not]: null } // Only show records approved by admin (Ashish)
-    };
-
+    // Build common date filter
+    const dateFilter = {};
     if (dateFrom || dateTo) {
-      where.date = {};
-      if (dateFrom) where.date[Op.gte] = dateFrom;
-      if (dateTo) where.date[Op.lte] = dateTo;
+      dateFilter.date = {};
+      if (dateFrom) dateFilter.date[Op.gte] = dateFrom;
+      if (dateTo) dateFilter.date[Op.lte] = dateTo;
     }
 
-    // Get total count first for pagination info
-    const totalCount = await Arrival.count({ where });
-    const totalPages = Math.ceil(totalCount / limitNum);
-
-    const transactions = await Arrival.findAll({
-      where,
-      include: [
-        { model: User, as: 'creator', attributes: ['username'] },
-        { model: Kunchinittu, as: 'toKunchinittu', attributes: ['name', 'code'] },
-        { model: Warehouse, as: 'toWarehouse', attributes: ['name', 'code'] },
-        { model: Warehouse, as: 'fromWarehouse', attributes: ['name', 'code'] },
-        { model: Warehouse, as: 'toWarehouseShift', attributes: ['name', 'code'] },
-        { model: Kunchinittu, as: 'fromKunchinittu', attributes: ['name', 'code'] },
-        { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety'] },
-        { model: PurchaseRate, as: 'purchaseRate', attributes: ['baseRate', 'rateType', 'sute', 'h', 'b', 'lf', 'egb', 'totalAmount', 'averageRate', 'amountFormula'], required: false }
-      ],
-      order: [['date', 'ASC'], ['createdAt', 'ASC']],
-      limit: limitNum,
-      offset: offset
-    });
-
-    // Separate inward and outward transactions correctly
-    // INWARD = All transactions coming TO this kunchinittu (Purchase + Shifting in + Loose)
-    const inward = transactions.filter(t =>
-      t.toKunchinintuId == id &&
-      (t.movementType === 'purchase' || t.movementType === 'shifting' || t.movementType === 'loose')
-    );
-
-    // OUTWARD = Production shifting + Normal shifting going out from this kunchinittu
-    const outward = transactions.filter(t =>
-      t.fromKunchinintuId == id &&
-      (t.movementType === 'shifting' || t.movementType === 'production-shifting')
-    );
-
-    // Calculate totals - ensure netWeight is parsed as float
-    const inwardTotal = {
-      bags: inward.reduce((sum, t) => sum + parseInt(t.bags || 0), 0),
-      netWeight: inward.reduce((sum, t) => sum + parseFloat(t.netWeight || 0), 0)
-    };
-
-    // Get all outturns associated with this kunchinittu
-    // Query through Arrival since the association is Arrival.belongsTo(Outturn)
-    const outturnIds = [...new Set(
-      transactions
-        .filter(t => t.outturnId)
-        .map(t => t.outturnId)
-    )];
-
-    // Get all rice production records for these outturns within the date range
-    const riceProductionWhere = {
-      outturnId: { [Op.in]: outturnIds },
+    const commonFilter = {
       status: 'approved',
+      adminApprovedBy: { [Op.not]: null },
+      ...dateFilter
     };
 
-    // Only add date filter if it's defined
-    if (where.date) {
-      riceProductionWhere.date = where.date;
-    }
+    // Build INWARD and OUTWARD where clauses separately (no OR — faster queries)
+    const inwardWhere = {
+      ...commonFilter,
+      toKunchinintuId: id,
+      movementType: { [Op.in]: ['purchase', 'shifting', 'loose'] }
+    };
 
-    const riceProductions = await RiceProduction.findAll({
-      where: riceProductionWhere,
-      include: [
-        { model: Outturn, as: 'outturn', attributes: ['code'] },
-        { model: User, as: 'creator', attributes: ['username'] },
-      ],
-    });
+    const outwardWhere = {
+      ...commonFilter,
+      fromKunchinintuId: id,
+      movementType: { [Op.in]: ['shifting', 'production-shifting'] }
+    };
+
+    const commonIncludes = [
+      { model: User, as: 'creator', attributes: ['username'] },
+      { model: Kunchinittu, as: 'toKunchinittu', attributes: ['name', 'code'] },
+      { model: Warehouse, as: 'toWarehouse', attributes: ['name', 'code'] },
+      { model: Warehouse, as: 'fromWarehouse', attributes: ['name', 'code'] },
+      { model: Warehouse, as: 'toWarehouseShift', attributes: ['name', 'code'] },
+      { model: Kunchinittu, as: 'fromKunchinittu', attributes: ['name', 'code'] },
+      { model: Outturn, as: 'outturn', attributes: ['code', 'allottedVariety'] }
+    ];
+
+    // Build date conditions for raw SQL
+    const dateConditions = [];
+    const dateReplacements = { id };
+    if (dateFrom) {
+      dateConditions.push('a.date >= :dateFrom');
+      dateReplacements.dateFrom = dateFrom;
+    }
+    if (dateTo) {
+      dateConditions.push('a.date <= :dateTo');
+      dateReplacements.dateTo = dateTo;
+    }
+    const dateSQL = dateConditions.length > 0 ? ' AND ' + dateConditions.join(' AND ') : '';
+
+    // Run ALL queries in parallel for maximum speed
+    const [
+      inwardTotalsRaw,
+      outwardTotalsRaw,
+      inward,
+      outward,
+      outturnIdsRaw,
+      avgRateRaw
+    ] = await Promise.all([
+      // 1. Inward count + totals via raw SQL (reliable column names)
+      sequelize.query(`
+        SELECT 
+          COUNT(*) AS "count",
+          COALESCE(SUM(CAST(a.bags AS INTEGER)), 0) AS "totalBags",
+          COALESCE(SUM(CAST(a."netWeight" AS FLOAT)), 0) AS "totalNetWeight"
+        FROM arrivals a
+        WHERE a."toKunchinintuId" = :id
+          AND a.status = 'approved'
+          AND a."adminApprovedBy" IS NOT NULL
+          AND a."movementType" IN ('purchase', 'shifting', 'loose')
+          ${dateSQL}
+      `, {
+        replacements: dateReplacements,
+        type: sequelize.QueryTypes.SELECT
+      }),
+      // 2. Outward count + totals via raw SQL
+      sequelize.query(`
+        SELECT 
+          COUNT(*) AS "count",
+          COALESCE(SUM(CAST(a.bags AS INTEGER)), 0) AS "totalBags",
+          COALESCE(SUM(CAST(a."netWeight" AS FLOAT)), 0) AS "totalNetWeight"
+        FROM arrivals a
+        WHERE a."fromKunchinintuId" = :id
+          AND a.status = 'approved'
+          AND a."adminApprovedBy" IS NOT NULL
+          AND a."movementType" IN ('shifting', 'production-shifting')
+          ${dateSQL}
+      `, {
+        replacements: dateReplacements,
+        type: sequelize.QueryTypes.SELECT
+      }),
+      // 3. Inward paginated data (ORM with includes — works fine)
+      Arrival.findAll({
+        where: inwardWhere,
+        include: [
+          ...commonIncludes,
+          { model: PurchaseRate, as: 'purchaseRate', attributes: ['baseRate', 'rateType', 'sute', 'h', 'b', 'lf', 'egb', 'totalAmount', 'averageRate', 'amountFormula'], required: false }
+        ],
+        order: [['date', 'ASC'], ['createdAt', 'ASC']],
+        limit: limitNum,
+        offset: offset
+      }),
+      // 4. Outward paginated data
+      Arrival.findAll({
+        where: outwardWhere,
+        include: commonIncludes,
+        order: [['date', 'ASC'], ['createdAt', 'ASC']],
+        limit: limitNum,
+        offset: offset
+      }),
+      // 5. Outturn IDs for rice production (only IDs, very fast)
+      sequelize.query(`
+        SELECT DISTINCT a."outturnId"
+        FROM arrivals a
+        WHERE (a."toKunchinintuId" = :id OR a."fromKunchinintuId" = :id)
+          AND a.status = 'approved'
+          AND a."adminApprovedBy" IS NOT NULL
+          AND a."outturnId" IS NOT NULL
+          ${dateSQL}
+      `, {
+        replacements: dateReplacements,
+        type: sequelize.QueryTypes.SELECT
+      }),
+      // 6. Average rate via SQL aggregation (purchase inward with rates)
+      sequelize.query(`
+        SELECT 
+          COALESCE(SUM(CAST(pr.total_amount AS FLOAT)), 0) AS "totalAmount",
+          COALESCE(SUM(CAST(a."netWeight" AS FLOAT)), 0) AS "totalWeight"
+        FROM arrivals a
+        INNER JOIN purchase_rates pr ON pr.arrival_id = a.id
+        WHERE a."toKunchinintuId" = :id
+          AND a.status = 'approved'
+          AND a."adminApprovedBy" IS NOT NULL
+          AND a."movementType" = 'purchase'
+          AND pr.total_amount IS NOT NULL
+          AND a."netWeight" IS NOT NULL
+          AND CAST(pr.total_amount AS FLOAT) > 0
+          AND CAST(a."netWeight" AS FLOAT) > 0
+      `, {
+        replacements: { id },
+        type: sequelize.QueryTypes.SELECT
+      })
+    ]);
+
+    const inwardCount = parseInt(inwardTotalsRaw[0]?.count || 0);
+    const outwardCount = parseInt(outwardTotalsRaw[0]?.count || 0);
+    const totalCount = inwardCount + outwardCount;
+    const totalPages = Math.ceil(Math.max(inwardCount, outwardCount) / limitNum);
+
+    // Extract totals from raw SQL results
+    const inwardTotal = {
+      bags: parseInt(inwardTotalsRaw[0]?.totalBags || 0),
+      netWeight: parseFloat(inwardTotalsRaw[0]?.totalNetWeight || 0)
+    };
 
     const outwardTotal = {
-      bags: outward.reduce((sum, t) => sum + parseInt(t.bags || 0), 0),
-      netWeight: outward.reduce((sum, t) => sum + parseFloat(t.netWeight || 0), 0)
+      bags: parseInt(outwardTotalsRaw[0]?.totalBags || 0),
+      netWeight: parseFloat(outwardTotalsRaw[0]?.totalNetWeight || 0)
     };
 
-    // Calculate remaining (DO NOT subtract rice production here - only in Paddy Stock)
     const remaining = {
       bags: inwardTotal.bags - outwardTotal.bags,
       netWeight: inwardTotal.netWeight - outwardTotal.netWeight
     };
 
-    // 📊 Calculate average rate directly from loaded purchase records
+    // Get outturn IDs for rice production query
+    const outturnIds = outturnIdsRaw.map(r => r.outturnId);
+
+    // Fetch rice productions only if there are outturns
+    let riceProductions = [];
+    if (outturnIds.length > 0) {
+      const riceProductionWhere = {
+        outturnId: { [Op.in]: outturnIds },
+        status: 'approved',
+      };
+      if (dateFilter.date) riceProductionWhere.date = dateFilter.date;
+
+      riceProductions = await RiceProduction.findAll({
+        where: riceProductionWhere,
+        include: [
+          { model: Outturn, as: 'outturn', attributes: ['code'] },
+          { model: User, as: 'creator', attributes: ['username'] },
+        ],
+      });
+    }
+
+    // Calculate average rate from SQL result — no more JS loop over all records
     let calculatedAverageRate = 0;
     try {
-      // Filter inward transactions that have purchase rates
-      const purchaseRecordsWithRates = inward.filter(t =>
-        t.movementType === 'purchase' &&
-        t.purchaseRate &&
-        t.purchaseRate.totalAmount &&
-        t.netWeight
-      );
-
-      console.log(`🔍 Found ${purchaseRecordsWithRates.length} purchase records with rates for kunchinittu ${id}`);
-
-      if (purchaseRecordsWithRates.length > 0) {
-        // Calculate weighted average: sum(totalAmount) / sum(netWeight) * 75
-        const totalAmount = purchaseRecordsWithRates.reduce((sum, t) =>
-          sum + parseFloat(t.purchaseRate.totalAmount), 0
-        );
-        const totalWeight = purchaseRecordsWithRates.reduce((sum, t) =>
-          sum + parseFloat(t.netWeight), 0
-        );
-
-        if (totalWeight > 0) {
-          calculatedAverageRate = (totalAmount / totalWeight) * 75;
-          console.log(`✅ Calculated average rate for kunchinittu ${id}: ₹${calculatedAverageRate.toFixed(2)}/Q (${purchaseRecordsWithRates.length} records, ${totalWeight}kg total)`);
-
-          // 💾 SAVE to database so production-shifting can read it
-          await kunchinittu.update({
-            averageRate: parseFloat(calculatedAverageRate.toFixed(2)),
-            lastRateCalculation: new Date()
-          });
-          console.log(`💾 Saved average rate to database: ₹${calculatedAverageRate.toFixed(2)}/Q`);
-        }
-      } else {
-        console.log(`⚠️ No purchase records with rates found for kunchinittu ${id}`);
+      const rateData = avgRateRaw[0];
+      if (rateData && parseFloat(rateData.totalWeight) > 0) {
+        calculatedAverageRate = (parseFloat(rateData.totalAmount) / parseFloat(rateData.totalWeight)) * 75;
+        // Save to database
+        await kunchinittu.update({
+          averageRate: parseFloat(calculatedAverageRate.toFixed(2)),
+          lastRateCalculation: new Date()
+        });
       }
     } catch (error) {
       console.error('Error calculating average rate:', error);
     }
+
+    const responseTime = Date.now() - startTime;
 
     res.json({
       kunchinittu: {
@@ -174,8 +247,8 @@ router.get('/kunchinittu/:id', auth, async (req, res) => {
         code: kunchinittu.code,
         warehouse: kunchinittu.warehouse,
         variety: kunchinittu.variety,
-        averageRate: parseFloat(calculatedAverageRate.toFixed(2)), // Use calculated rate
-        lastRateCalculation: new Date(), // Update timestamp
+        averageRate: parseFloat(calculatedAverageRate.toFixed(2)),
+        lastRateCalculation: new Date(),
         isClosed: kunchinittu.isClosed || false,
         closedAt: kunchinittu.closedAt,
         closedBy: kunchinittu.closedBy
@@ -196,11 +269,11 @@ router.get('/kunchinittu/:id', auth, async (req, res) => {
         totalPages: totalPages,
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1
-      }
+      },
+      performance: { responseTime: `${responseTime}ms` }
     });
   } catch (error) {
     console.error('Get kunchinittu ledger error:', error);
-    // Return empty data instead of error to prevent crashes
     res.json({
       kunchinittu: null,
       transactions: { inward: [], outward: [] },

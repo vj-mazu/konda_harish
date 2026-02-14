@@ -1188,6 +1188,16 @@ const startServer = async () => {
         console.log('⚠️ Migration 88 warning:', error.message);
       }
 
+      // Migration 90: Ultra-Performance Composite Indexes for 10 lakh records
+      try {
+        const ultraPerformanceIndexes = require('./migrations/90_ultra_performance_composite_indexes');
+        const queryInterface = sequelize.getQueryInterface();
+        await ultraPerformanceIndexes.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 90: Ultra-performance composite indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 90 warning:', error.message);
+      }
+
       console.log('✅ Migrations completed.');
     } catch (error) {
       console.log('⚠️ Migrations warning:', error.message);
