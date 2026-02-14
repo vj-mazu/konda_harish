@@ -84,13 +84,21 @@ const RoleBadge = styled.span<{ role: string }>`
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
+  text-transform: capitalize;
   ${props => {
         switch (props.role) {
             case 'admin':
                 return 'background: #fee2e2; color: #dc2626;';
             case 'manager':
                 return 'background: #fef3c7; color: #d97706;';
+            case 'quality_supervisor':
+                return 'background: #e0e7ff; color: #4f46e5;';
+            case 'physical_supervisor':
+                return 'background: #fce7f3; color: #db2777;';
+            case 'inventory_staff':
+                return 'background: #d1fae5; color: #059669;';
+            case 'financial_account':
+                return 'background: #fef3c7; color: #ca8a04;';
             default:
                 return 'background: #dbeafe; color: #2563eb;';
         }
@@ -266,7 +274,7 @@ const InfoBox = styled.div`
 interface User {
     id: number;
     username: string;
-    role: 'staff' | 'manager' | 'admin';
+    role: 'staff' | 'manager' | 'admin' | 'quality_supervisor' | 'physical_supervisor' | 'inventory_staff' | 'financial_account';
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -381,6 +389,10 @@ const EditModal: React.FC<EditModalProps> = ({ user, mode, onClose, onSave }) =>
                                 <option value="staff">Staff</option>
                                 <option value="manager">Manager</option>
                                 <option value="admin">Admin</option>
+                                <option value="quality_supervisor">Quality Supervisor</option>
+                                <option value="physical_supervisor">Physical Supervisor</option>
+                                <option value="inventory_staff">Inventory Staff</option>
+                                <option value="financial_account">Financial Account</option>
                             </Select>
                         </FormGroup>
                     )}
@@ -544,6 +556,10 @@ const UserManagement: React.FC = () => {
                                         <option value="staff">Staff</option>
                                         <option value="manager">Manager</option>
                                         <option value="admin">Admin</option>
+                                        <option value="quality_supervisor">Quality Supervisor</option>
+                                        <option value="physical_supervisor">Physical Supervisor</option>
+                                        <option value="inventory_staff">Inventory Staff</option>
+                                        <option value="financial_account">Financial Account</option>
                                     </Select>
                                 </Td>
                                 <Td>

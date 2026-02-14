@@ -31,3 +31,19 @@ yarn-error.log*
 
 # Specific project files
 .github/instructions/kluster-code-verify.instructions.md
+
+# User requested exclusions
+.kiro/
+.github/
+*.md
+!README.md
+*.py
+database.sqlite
+uploads/
+git_status.txt
+status_short.txt
+diff_ignore_whitespace.txt
+diff_stat.txt
+temp_line.txt
+*.swp
+*~

@@ -16,6 +16,18 @@ import AddPurchaseRate from './pages/AddPurchaseRate';
 import HamaliBookSimple from './pages/HamaliBookSimple';
 import UserManagement from './pages/UserManagement';
 import PendingApprovals from './pages/PendingApprovals';
+import SampleEntry from './pages/SampleEntry';
+import SampleEntryLedger from './pages/SampleEntryLedger';
+import OwnerSampleReports from './pages/OwnerSampleReports';
+import AssigningSupervisor from './pages/AssigningSupervisor';
+import AllottedSupervisors from './pages/AllottedSupervisors';
+import AllottingSupervisors from './pages/AllottingSupervisors';
+import PhysicalInspection from './pages/PhysicalInspection';
+import InventoryEntry from './pages/InventoryEntry';
+import OwnerFinancialPage from './pages/OwnerFinancialPage';
+import ManagerFinancialPage from './pages/ManagerFinancialPage';
+import FinalReviewPage from './pages/FinalReviewPage';
+import SampleWorkflow from './pages/SampleWorkflow';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import './globalNotification.css';
@@ -146,6 +158,106 @@ const AppContent: React.FC = () => {
               <ProtectedRoute roles={['manager', 'admin']}>
                 <Layout>
                   <PendingApprovals />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sample-entry"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <SampleEntry />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sample-entry-ledger"
+            element={
+              <ProtectedRoute roles={['manager', 'admin']}>
+                <Layout>
+                  <SampleEntryLedger />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner-sample-reports"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Layout>
+                  <OwnerSampleReports />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/allotting-supervisors"
+            element={
+              <ProtectedRoute roles={['manager']}>
+                <Layout>
+                  <AllottingSupervisors />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/physical-inspection"
+            element={
+              <ProtectedRoute roles={['physical_supervisor']}>
+                <Layout>
+                  <PhysicalInspection />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/inventory-entry"
+            element={
+              <ProtectedRoute roles={['inventory_staff', 'admin']}>
+                <Layout>
+                  <InventoryEntry />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner-financial"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Layout>
+                  <OwnerFinancialPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager-financial"
+            element={
+              <ProtectedRoute roles={['manager', 'admin']}>
+                <Layout>
+                  <ManagerFinancialPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/final-review"
+            element={
+              <ProtectedRoute roles={['manager', 'admin']}>
+                <Layout>
+                  <FinalReviewPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sample-workflow"
+            element={
+              <ProtectedRoute roles={['manager', 'admin']}>
+                <Layout>
+                  <SampleWorkflow />
                 </Layout>
               </ProtectedRoute>
             }

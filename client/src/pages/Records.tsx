@@ -739,6 +739,12 @@ const getWeekRange = (date: Date): string => {
   return `Week: ${formatDate(monday)} to ${formatDate(sunday)}`;
 };
 
+// Helper function to format cutting string (e.g., "12X5" → "12 x 5")
+const formatCutting = (cutting: string | null | undefined): string => {
+  if (!cutting) return '-';
+  return cutting.replace(/[Xx]/g, ' x ').replace(/\s+/g, ' ').trim();
+};
+
 // Helper function to get week key for grouping
 const getWeekKey = (date: string): string => {
   const d = new Date(date);
@@ -7190,7 +7196,7 @@ const Records: React.FC = () => {
                               </VarietyCell>
                               <td>{record.bags || 0}</td>
                               <td>{record.moisture || '-'}</td>
-                              <td>{record.cutting || '-'}</td>
+                              <td>{formatCutting(record.cutting)}</td>
                               <td>{record.wbNo || '-'}</td>
                               <td>{isNaN(Number(record.netWeight)) ? '0.00' : Number(record.netWeight || 0).toFixed(2)}</td>
                               <td>{record.lorryNumber || '-'}</td>
@@ -9029,7 +9035,7 @@ const Records: React.FC = () => {
                                 </VarietyCell>
                                 <td>{record.bags || '-'}</td>
                                 <td>{isLoose ? '-' : (record.moisture || '-')}</td>
-                                <td>{isLoose ? '-' : (record.cutting || '-')}</td>
+                                <td>{isLoose ? '-' : formatCutting(record.cutting)}</td>
                                 <td>{isLoose ? '-' : record.wbNo}</td>
                                 <td>{isLoose ? '-' : record.grossWeight}</td>
                                 <td>{isLoose ? '-' : record.tareWeight}</td>
@@ -9301,7 +9307,7 @@ const Records: React.FC = () => {
                               </VarietyCell>
                               <td>{record.bags || '-'}</td>
                               <td>{record.moisture || '-'}</td>
-                              <td>{record.cutting || '-'}</td>
+                              <td>{formatCutting(record.cutting)}</td>
                               <td>{record.wbNo}</td>
                               <td>{record.grossWeight}</td>
                               <td>{record.tareWeight}</td>
@@ -9693,7 +9699,7 @@ const Records: React.FC = () => {
                             </VarietyCell>
                             <td>{record.bags || '-'}</td>
                             <td>{record.moisture || '-'}</td>
-                            <td>{record.cutting || '-'}</td>
+                            <td>{formatCutting(record.cutting)}</td>
                             <td>{record.wbNo}</td>
                             <td>{record.grossWeight}</td>
                             <td>{record.tareWeight}</td>

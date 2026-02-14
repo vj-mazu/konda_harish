@@ -10,10 +10,19 @@
     "build": "cd client && npm run build",
     "install-deps": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["stock-management", "industrial", "mill", "inventory"],
+  "keywords": [
+    "stock-management",
+    "industrial",
+    "mill",
+    "inventory"
+  ],
   "author": "Mother India Mill",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "sharp": "^0.33.5"
   }
 }

@@ -35,6 +35,35 @@ router.get('/users', auth, authorize('admin'), async (req, res) => {
 });
 
 /**
+ * GET /api/admin/physical-supervisors
+ * Get all physical supervisors (manager and admin can access)
+ */
+router.get('/physical-supervisors', auth, authorize('admin', 'manager'), async (req, res) => {
+    try {
+        const supervisors = await User.findAll({
+            where: { 
+                role: 'physical_supervisor',
+                isActive: true 
+            },
+            attributes: ['id', 'username'],
+            order: [['username', 'ASC']]
+        });
+
+        res.json({
+            success: true,
+            users: supervisors.map(user => ({
+                id: user.id,
+                username: user.username,
+                fullName: user.username // Use username as fullName since fullName field doesn't exist
+            }))
+        });
+    } catch (error) {
+        console.error('Get physical supervisors error:', error);
+        res.status(500).json({ error: 'Failed to fetch physical supervisors' });
+    }
+});
+
+/**
  * POST /api/admin/users
  * Create a new user (admin only)
  */
@@ -47,8 +76,9 @@ router.post('/users', auth, authorize('admin'), async (req, res) => {
             return res.status(400).json({ error: 'Username, password, and role are required' });
         }
 
-        if (!['staff', 'manager', 'admin'].includes(role)) {
-            return res.status(400).json({ error: 'Invalid role. Must be staff, manager, or admin' });
+        const validRoles = ['staff', 'manager', 'admin', 'quality_supervisor', 'physical_supervisor', 'inventory_staff', 'financial_account'];
+        if (!validRoles.includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be one of: staff, manager, admin, quality_supervisor, physical_supervisor, inventory_staff, financial_account' });
         }
 
         if (password.length < 4) {
@@ -221,8 +251,9 @@ router.put('/users/:id/role', auth, authorize('admin'), async (req, res) => {
             return res.status(400).json({ error: 'You cannot change your own role' });
         }
 
-        if (!['staff', 'manager', 'admin'].includes(role)) {
-            return res.status(400).json({ error: 'Invalid role. Must be staff, manager, or admin' });
+        const validRoles = ['staff', 'manager', 'admin', 'quality_supervisor', 'physical_supervisor', 'inventory_staff', 'financial_account'];
+        if (!validRoles.includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be one of: staff, manager, admin, quality_supervisor, physical_supervisor, inventory_staff, financial_account' });
         }
 
         const user = await User.findByPk(id);

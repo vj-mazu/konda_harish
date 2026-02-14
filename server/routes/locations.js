@@ -3,6 +3,7 @@ const { auth, authorize } = require('../middleware/auth');
 const { Warehouse, Kunchinittu, Variety } = require('../models/Location');
 const RiceStockLocation = require('../models/RiceStockLocation');
 const RiceVariety = require('../models/RiceVariety');
+const Broker = require('../models/Broker');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -716,6 +717,117 @@ router.delete('/rice-varieties/:id', auth, authorize('admin'), async (req, res) 
   } catch (error) {
     console.error('Delete rice variety error:', error);
     res.status(500).json({ error: 'Failed to delete rice variety' });
+  }
+});
+
+// ===== BROKERS =====
+
+// Get all brokers
+router.get('/brokers', auth, async (req, res) => {
+  try {
+    const brokers = await Broker.findAll({
+      where: { isActive: true },
+      attributes: ['id', 'name', 'description'],
+      order: [['name', 'ASC']],
+      raw: true
+    });
+
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ brokers });
+  } catch (error) {
+    console.error('Get brokers error:', error);
+    res.status(500).json({ error: 'Failed to fetch brokers' });
+  }
+});
+
+// Create broker (Manager/Admin only)
+router.post('/brokers', auth, authorize('manager', 'admin'), async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Broker name is required' });
+    }
+
+    // Check for duplicate name
+    const existingName = await Broker.findOne({
+      where: { name: name.trim().toUpperCase() }
+    });
+
+    if (existingName) {
+      return res.status(400).json({ error: 'Broker name already exists' });
+    }
+
+    const broker = await Broker.create({
+      name: name.trim().toUpperCase(),
+      description: description ? description.trim() : null
+    });
+
+    res.status(201).json({
+      message: 'Broker created successfully',
+      broker
+    });
+  } catch (error) {
+    console.error('Create broker error:', error);
+    res.status(500).json({ error: 'Failed to create broker' });
+  }
+});
+
+// Update broker (Manager/Admin only)
+router.put('/brokers/:id', auth, authorize('manager', 'admin'), async (req, res) => {
+  try {
+    const broker = await Broker.findByPk(req.params.id);
+    if (!broker) {
+      return res.status(404).json({ error: 'Broker not found' });
+    }
+
+    const { name, description, isActive } = req.body;
+    const { Op } = require('sequelize');
+
+    // Check for duplicate name (excluding current broker)
+    if (name && name.trim().toUpperCase() !== broker.name) {
+      const existingName = await Broker.findOne({
+        where: {
+          name: name.trim().toUpperCase(),
+          id: { [Op.ne]: req.params.id }
+        }
+      });
+      if (existingName) {
+        return res.status(400).json({ error: 'Broker name already exists' });
+      }
+    }
+
+    await broker.update({
+      name: name ? name.trim().toUpperCase() : broker.name,
+      description: description !== undefined ? (description ? description.trim() : null) : broker.description,
+      isActive: isActive !== undefined ? isActive : broker.isActive
+    });
+
+    res.json({
+      message: 'Broker updated successfully',
+      broker
+    });
+  } catch (error) {
+    console.error('Update broker error:', error);
+    res.status(500).json({ error: 'Failed to update broker' });
+  }
+});
+
+// Delete broker (Admin only)
+router.delete('/brokers/:id', auth, authorize('admin'), async (req, res) => {
+  try {
+    const broker = await Broker.findByPk(req.params.id);
+    if (!broker) {
+      return res.status(404).json({ error: 'Broker not found' });
+    }
+
+    // Soft delete
+    await broker.update({ isActive: false });
+
+    res.json({ message: 'Broker deleted successfully' });
+  } catch (error) {
+    console.error('Delete broker error:', error);
+    res.status(500).json({ error: 'Failed to delete broker' });
   }
 });
 

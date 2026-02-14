@@ -248,7 +248,7 @@ const EmptyState = styled.div`
 const Locations: React.FC = () => {
   const { user } = useAuth();
   const { warehouses, kunchinittus, varieties, riceVarieties, fetchWarehouses, fetchKunchinittus, fetchVarieties, fetchRiceVarieties } = useLocationContext();
-  const [activeTab, setActiveTab] = useState<'warehouse' | 'kunchinittu' | 'variety' | 'riceVariety' | 'production' | 'packaging' | 'riceStockLocation' | 'hamali' | 'riceHamali'>('warehouse');
+  const [activeTab, setActiveTab] = useState<'warehouse' | 'kunchinittu' | 'variety' | 'riceVariety' | 'production' | 'packaging' | 'riceStockLocation' | 'hamali' | 'riceHamali' | 'broker'>('warehouse');
 
   // Warehouse form
   const [warehouseName, setWarehouseName] = useState('');
@@ -267,6 +267,12 @@ const Locations: React.FC = () => {
   // Rice Variety form
   const [riceVarietyName, setRiceVarietyName] = useState('');
   const [editingRiceVariety, setEditingRiceVariety] = useState<any>(null);
+
+  // Broker form
+  const [brokerName, setBrokerName] = useState('');
+  const [brokerDescription, setBrokerDescription] = useState('');
+  const [brokers, setBrokers] = useState<any[]>([]);
+  const [editingBroker, setEditingBroker] = useState<any>(null);
 
   // Production (Outturn) form
   const [outturnCode, setOutturnCode] = useState('');
@@ -314,6 +320,8 @@ const Locations: React.FC = () => {
       fetchRiceVarieties();
     } else if (activeTab === 'hamali') {
       fetchHamaliRates();
+    } else if (activeTab === 'broker') {
+      fetchBrokers();
     }
   }, [activeTab]);
 
@@ -633,6 +641,9 @@ const Locations: React.FC = () => {
     setEditingRiceStockLocation(null);
     setRiceStockLocationCode('');
     setRiceStockLocationName('');
+    setEditingBroker(null);
+    setBrokerName('');
+    setBrokerDescription('');
   };
 
   // Packaging functions
@@ -866,6 +877,87 @@ const Locations: React.FC = () => {
     fetchHamaliRates();
   };
 
+  // Broker functions
+  const fetchBrokers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get<{ brokers: any[] }>('/locations/brokers', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBrokers(response.data.brokers || []);
+    } catch (error) {
+      console.error('Error fetching brokers:', error);
+      toast.error('Failed to fetch brokers');
+    }
+  };
+
+  const handleCreateBroker = async () => {
+    if (!brokerName.trim()) {
+      toast.error('Please enter broker name');
+      return;
+    }
+
+    if (!canEdit) {
+      toast.error('You do not have permission to perform this action');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
+        name: brokerName.trim().toUpperCase(),
+        description: brokerDescription.trim() || null
+      };
+
+      if (editingBroker) {
+        await axios.put(`/locations/brokers/${editingBroker.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success('Broker updated successfully!');
+      } else {
+        await axios.post('/locations/brokers', payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success('Broker created successfully!');
+      }
+
+      setBrokerName('');
+      setBrokerDescription('');
+      setEditingBroker(null);
+      fetchBrokers();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || (editingBroker ? 'Failed to update broker' : 'Failed to create broker'));
+    }
+  };
+
+  const handleDeleteBroker = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this broker?')) {
+      return;
+    }
+
+    if (!canEdit) {
+      toast.error('You do not have permission to perform this action');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/locations/brokers/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Broker deleted successfully!');
+      fetchBrokers();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to delete broker');
+    }
+  };
+
+  const handleEditBroker = (broker: any) => {
+    setEditingBroker(broker);
+    setBrokerName(broker.name);
+    setBrokerDescription(broker.description || '');
+  };
+
   return (
     <Container>
       <Title>📍 Location Management</Title>
@@ -891,6 +983,9 @@ const Locations: React.FC = () => {
         </Tab>
         <Tab active={activeTab === 'riceVariety'} onClick={() => setActiveTab('riceVariety')}>
           Rice Varieties
+        </Tab>
+        <Tab active={activeTab === 'broker'} onClick={() => setActiveTab('broker')}>
+          Brokers
         </Tab>
         <Tab active={activeTab === 'hamali'} onClick={() => setActiveTab('hamali')}>
           Paddy Hamali
@@ -1522,6 +1617,90 @@ const Locations: React.FC = () => {
 
         {activeTab === 'riceHamali' && (
           <RiceHamaliRatesTable />
+        )}
+
+        {activeTab === 'broker' && (
+          <>
+            <SectionHeader>
+              <SectionTitle>Broker Management</SectionTitle>
+            </SectionHeader>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+              {/* Left Column - Creation Form */}
+              <div>
+                <FormGroup>
+                  <Label>Broker Name *</Label>
+                  <Input
+                    type="text"
+                    value={brokerName}
+                    onChange={(e) => setBrokerName(e.target.value)}
+                    placeholder="Enter broker name"
+                  />
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>Description (Optional)</Label>
+                  <Input
+                    type="text"
+                    value={brokerDescription}
+                    onChange={(e) => setBrokerDescription(e.target.value)}
+                    placeholder="Enter description"
+                  />
+                </FormGroup>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  {editingBroker && (
+                    <Button className="secondary" onClick={handleCancelEdit}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button className="primary" onClick={handleCreateBroker} disabled={!canEdit}>
+                    {editingBroker ? 'Update Broker' : 'Create Broker'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right Column - Brokers Table */}
+              <div>
+                <h3 style={{ marginBottom: '1rem', color: '#1f2937' }}>Existing Brokers</h3>
+                {brokers.length === 0 ? (
+                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>
+                    No brokers created yet
+                  </p>
+                ) : (
+                  <Table>
+                    <thead>
+                      <tr>
+                        <Th>Broker Name</Th>
+                        <Th>Description</Th>
+                        {canEdit && <Th>Actions</Th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {brokers.map((broker) => (
+                        <tr key={broker.id}>
+                          <Td>{broker.name}</Td>
+                          <Td>{broker.description || '-'}</Td>
+                          {canEdit && (
+                            <Td>
+                              <ActionButtons>
+                                <IconButton className="edit" onClick={() => handleEditBroker(broker)}>
+                                  ✏️
+                                </IconButton>
+                                <IconButton className="delete" onClick={() => handleDeleteBroker(broker.id)}>
+                                  🗑️
+                                </IconButton>
+                              </ActionButtons>
+                            </Td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </SectionContainer>
     </Container>

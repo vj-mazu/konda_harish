@@ -35,6 +35,7 @@ const riceStockVarietiesRoutes = require('./routes/rice-stock-varieties');
 const yieldRoutes = require('./routes/yield');
 const adminUsersRoutes = require('./routes/admin-users');
 const unifiedVarietiesRoutes = require('./routes/unified-varieties');
+const sampleEntriesRoutes = require('./routes/sample-entries');
 
 const compression = require('compression');
 const performanceMonitor = require('./middleware/performanceMonitor');
@@ -144,6 +145,7 @@ app.use('/api', riceStockVarietiesRoutes); // Rice stock varieties API endpoints
 app.use('/api/yield', yieldRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/unified-varieties', unifiedVarietiesRoutes);
+app.use('/api/sample-entries', sampleEntriesRoutes);
 
 
 // Health check
@@ -1027,6 +1029,135 @@ const startServer = async () => {
         console.log('⚠️ Migration 73 warning:', error.message);
       }
 
+      // Migration 74: Add Sample Entry user roles
+      try {
+        const addSampleEntryUserRoles = require('./migrations/74_add_sample_entry_user_roles');
+        await addSampleEntryUserRoles.up();
+        console.log('✅ Migration 74: Sample Entry user roles added');
+      } catch (error) {
+        console.log('⚠️ Migration 74 warning:', error.message);
+      }
+
+      // Migration 75: Create sample_entries table
+      try {
+        const createSampleEntriesTable = require('./migrations/75_create_sample_entries_table');
+        await createSampleEntriesTable.up();
+        console.log('✅ Migration 75: sample_entries table created');
+      } catch (error) {
+        console.log('⚠️ Migration 75 warning:', error.message);
+      }
+
+      // Migration 76: Create quality_parameters table
+      try {
+        const createQualityParametersTable = require('./migrations/76_create_quality_parameters_table');
+        await createQualityParametersTable.up();
+        console.log('✅ Migration 76: quality_parameters table created');
+      } catch (error) {
+        console.log('⚠️ Migration 76 warning:', error.message);
+      }
+
+      // Migration 77: Create cooking_reports table
+      try {
+        const createCookingReportsTable = require('./migrations/77_create_cooking_reports_table');
+        await createCookingReportsTable.up();
+        console.log('✅ Migration 77: cooking_reports table created');
+      } catch (error) {
+        console.log('⚠️ Migration 77 warning:', error.message);
+      }
+
+      // Migration 78: Create lot_allotments table
+      try {
+        const createLotAllotmentsTable = require('./migrations/78_create_lot_allotments_table');
+        await createLotAllotmentsTable.up();
+        console.log('✅ Migration 78: lot_allotments table created');
+      } catch (error) {
+        console.log('⚠️ Migration 78 warning:', error.message);
+      }
+
+      // Migration 79: Create physical_inspections table
+      try {
+        const createPhysicalInspectionsTable = require('./migrations/79_create_physical_inspections_table');
+        await createPhysicalInspectionsTable.up();
+        console.log('✅ Migration 79: physical_inspections table created');
+      } catch (error) {
+        console.log('⚠️ Migration 79 warning:', error.message);
+      }
+
+      // Migration 80: Create inventory_data table
+      try {
+        const createInventoryDataTable = require('./migrations/80_create_inventory_data_table');
+        await createInventoryDataTable.up();
+        console.log('✅ Migration 80: inventory_data table created');
+      } catch (error) {
+        console.log('⚠️ Migration 80 warning:', error.message);
+      }
+
+      // Migration 81: Create financial_calculations table
+      try {
+        const createFinancialCalculationsTable = require('./migrations/81_create_financial_calculations_table');
+        await createFinancialCalculationsTable.up();
+        console.log('✅ Migration 81: financial_calculations table created');
+      } catch (error) {
+        console.log('⚠️ Migration 81 warning:', error.message);
+      }
+
+      // Migration 82: Create sample_entry_audit_logs table
+      try {
+        const createSampleEntryAuditLogsTable = require('./migrations/82_create_sample_entry_audit_logs_table');
+        await createSampleEntryAuditLogsTable.up();
+        console.log('✅ Migration 82: sample_entry_audit_logs table created');
+      } catch (error) {
+        console.log('⚠️ Migration 82 warning:', error.message);
+      }
+
+      // Migration 83: Create brokers table
+      try {
+        const createBrokersTable = require('./migrations/83_create_brokers_table');
+        const queryInterface = sequelize.getQueryInterface();
+        await createBrokersTable.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 83: Brokers table created');
+      } catch (error) {
+        console.log('⚠️ Migration 83 warning:', error.message);
+      }
+
+      // Migration 84: Add reported_by text field to quality_parameters
+      try {
+        const addReportedByField = require('./migrations/84_add_reported_by_text_to_quality_parameters');
+        await addReportedByField.up();
+        console.log('✅ Migration 84: reported_by field added to quality_parameters');
+      } catch (error) {
+        console.log('⚠️ Migration 84 warning:', error.message);
+      }
+
+      // Migration 85: Remove phoo column from quality_parameters
+      try {
+        const removePhooField = require('./migrations/85_remove_phoo_from_quality_parameters');
+        await removePhooField.up();
+        console.log('✅ Migration 85: phoo column removed from quality_parameters');
+      } catch (error) {
+        console.log('⚠️ Migration 85 warning:', error.message);
+      }
+
+      // Migration 86: Add offering price fields to sample_entries
+      try {
+        const addOfferingPriceFields = require('./migrations/86_add_offering_price_to_sample_entries');
+        const queryInterface = sequelize.getQueryInterface();
+        await addOfferingPriceFields.up(queryInterface);
+        console.log('✅ Migration 86: offering price fields added to sample_entries');
+      } catch (error) {
+        console.log('⚠️ Migration 86 warning:', error.message);
+      }
+
+      // Migration 87: Enable multiple physical inspections per entry
+      try {
+        const enableMultipleInspections = require('./migrations/87_enable_multiple_physical_inspections');
+        const queryInterface = sequelize.getQueryInterface();
+        await enableMultipleInspections.up(queryInterface);
+        console.log('✅ Migration 87: Multiple physical inspections enabled');
+      } catch (error) {
+        console.log('⚠️ Migration 87 warning:', error.message);
+      }
+
       // Auto-fix: RJ Broken and Rejection Rice product types
       try {
         console.log('🔄 Auto-fixing product types (RJ Broken, Rejection Rice)...');
@@ -1046,6 +1177,15 @@ const startServer = async () => {
         console.log('✅ Auto-fix: RJ Broken and Rejection Rice added to product types');
       } catch (error) {
         console.log('⚠️ Product types auto-fix warning:', error.message);
+      }
+
+      // Migration 88: Add kunchinittu_id and outturn_id to inventory_data
+      try {
+        const addKunchinittuOutturnToInventoryData = require('./migrations/88_add_kunchinittu_outturn_to_inventory_data');
+        await addKunchinittuOutturnToInventoryData.up();
+        console.log('✅ Migration 88: kunchinittu_id and outturn_id added to inventory_data');
+      } catch (error) {
+        console.log('⚠️ Migration 88 warning:', error.message);
       }
 
       console.log('✅ Migrations completed.');

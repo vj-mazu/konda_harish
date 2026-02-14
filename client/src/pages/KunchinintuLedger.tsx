@@ -6,6 +6,18 @@ import { useAuth } from '../contexts/AuthContext';
 import PaginationControls from '../components/PaginationControls';
 import { generateKunchinintuLedgerPDF, generateKunchinintuPortraitPDF } from '../utils/ledgerPdfGenerator';
 
+// Format cutting string from "12X5" to "12 x 5"
+const formatCutting = (cutting: string | null | undefined): string => {
+  if (!cutting || cutting === '-') return '-';
+  const str = String(cutting).trim();
+  if (str.includes('X') || str.includes('x')) {
+    const parts = str.split(/[Xx]/);
+    if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+      return `${parts[0].trim()} x ${parts[1].trim()}`;
+    }
+  }
+  return str;
+};
 
 const Container = styled.div`
   animation: fadeIn 0.5s ease-in;
@@ -1338,7 +1350,7 @@ const KunchinintuLedger: React.FC = () => {
                                   <td>{record.movementType === 'loose' ? '-' : (record.variety || '-')}</td>
                                   <td>{record.bags || 0}</td>
                                   <td>{record.movementType === 'loose' ? '-' : (record.moisture || '-')}</td>
-                                  <td>{record.movementType === 'loose' ? '-' : (record.cutting || '-')}</td>
+                                  <td>{record.movementType === 'loose' ? '-' : formatCutting(record.cutting)}</td>
                                   <td>{record.movementType === 'loose' ? '-' : record.wbNo}</td>
                                   <td>{record.movementType === 'loose' ? '-' : (isNaN(Number(record.netWeight)) ? '0.00' : Number(record.netWeight || 0).toFixed(2))}</td>
                                   <td>{record.movementType === 'loose' ? '-' : record.lorryNumber}</td>
@@ -1416,7 +1428,7 @@ const KunchinintuLedger: React.FC = () => {
                             <td>{record.movementType === 'loose' ? '-' : (record.variety || '-')}</td>
                             <td>{record.bags || 0}</td>
                             <td>{record.movementType === 'loose' ? '-' : (record.moisture || '-')}</td>
-                            <td>{record.movementType === 'loose' ? '-' : (record.cutting || '-')}</td>
+                            <td>{record.movementType === 'loose' ? '-' : formatCutting(record.cutting)}</td>
                             <td>{record.movementType === 'loose' ? '-' : record.wbNo}</td>
                             <td>{record.movementType === 'loose' ? '-' : (isNaN(Number(record.netWeight)) ? '0.00' : Number(record.netWeight || 0).toFixed(2))}</td>
                             <td>{record.movementType === 'loose' ? '-' : record.lorryNumber}</td>
@@ -1527,7 +1539,7 @@ const KunchinintuLedger: React.FC = () => {
                           <td>{record.variety || '-'}</td>
                           <td>{record.bags || 0}</td>
                           <td>{record.moisture || '-'}</td>
-                          <td>{record.cutting || '-'}</td>
+                          <td>{formatCutting(record.cutting)}</td>
                           <td>{record.wbNo}</td>
                           <td>{isNaN(Number(record.netWeight)) ? '0.00' : Number(record.netWeight || 0).toFixed(2)}</td>
                           <td>{record.lorryNumber}</td>
@@ -1563,7 +1575,7 @@ const KunchinintuLedger: React.FC = () => {
                                 <td>{record.variety || '-'}</td>
                                 <td>{record.bags || 0}</td>
                                 <td>{record.moisture || '-'}</td>
-                                <td>{record.cutting || '-'}</td>
+                                <td>{formatCutting(record.cutting)}</td>
                                 <td>{record.wbNo}</td>
                                 <td>{isNaN(Number(record.netWeight)) ? '0.00' : Number(record.netWeight || 0).toFixed(2)}</td>
                                 <td>{record.lorryNumber}</td>

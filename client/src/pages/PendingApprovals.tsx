@@ -5,6 +5,11 @@ import { toast } from '../utils/toast';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+// Helper function to format cutting string (e.g., "12X5" → "12 x 5")
+const formatCutting = (cutting: string | null | undefined): string => {
+    if (!cutting) return '-';
+    return cutting.replace(/[Xx]/g, ' x ').replace(/\s+/g, ' ').trim();
+};
 const Container = styled.div`
   animation: fadeIn 0.5s ease-in;
 
@@ -1025,7 +1030,7 @@ const PendingApprovals: React.FC = () => {
                                     <td>{arrival.tareWeight ? parseFloat(arrival.tareWeight.toString()).toFixed(0) : '-'}</td>
                                     <td><strong>{parseFloat(arrival.netWeight.toString()).toFixed(0)}</strong></td>
                                     <td>{arrival.moisture ? `${arrival.moisture}%` : '-'}</td>
-                                    <td>{arrival.cutting || '-'}</td>
+                                    <td>{formatCutting(arrival.cutting)}</td>
                                     <td style={{ fontSize: '0.85rem' }}>{getDestination(arrival)}</td>
                                     <td>{arrival.wbNo}</td>
                                     <td>{arrival.lorryNumber}</td>

@@ -655,7 +655,18 @@ const AddPurchaseRate: React.FC = () => {
           </DetailItem>
           <DetailItem>
             <DetailLabel>Cutting</DetailLabel>
-            <DetailValue>{arrival.cutting}</DetailValue>
+            <DetailValue>{(() => {
+              const c = arrival.cutting;
+              if (!c || c === '-') return '-';
+              const s = String(c).trim();
+              if (s.includes('X') || s.includes('x')) {
+                const parts = s.split(/[Xx]/);
+                if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+                  return `${parts[0].trim()} x ${parts[1].trim()}`;
+                }
+              }
+              return s;
+            })()}</DetailValue>
           </DetailItem>
         </DetailGrid>
       </Card>

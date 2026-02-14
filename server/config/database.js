@@ -22,6 +22,7 @@ const sequelize = dbUrl
     dialect: 'postgres',
     protocol: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    minifyAliases: true,
     dialectOptions: {
       ssl: {
         require: true,
@@ -56,6 +57,7 @@ const sequelize = dbUrl
     port: process.env.DB_PORT || 5432,
     dialect: 'postgresql',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    minifyAliases: true,
 
     // Connection pool configuration for better performance
     pool: {

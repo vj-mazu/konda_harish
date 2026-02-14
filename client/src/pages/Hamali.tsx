@@ -1030,7 +1030,18 @@ const Hamali: React.FC = () => {
                             </td>
                             <td>{record.bags || '-'}</td>
                             <td>{record.moisture ? `${record.moisture}%` : '-'}</td>
-                            <td>{record.cutting || '-'}</td>
+                            <td>{(() => {
+                              const c = record.cutting;
+                              if (!c || c === '-') return '-';
+                              const s = String(c).trim();
+                              if (s.includes('X') || s.includes('x')) {
+                                const parts = s.split(/[Xx]/);
+                                if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+                                  return `${parts[0].trim()} x ${parts[1].trim()}`;
+                                }
+                              }
+                              return s;
+                            })()}</td>
                             <td>{record.wbNo}</td>
                             <td>{record.grossWeight.toFixed(2)}</td>
                             <td>{record.tareWeight.toFixed(2)}</td>
