@@ -19,9 +19,5 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "bcrypt": "^5.1.1",
-    "sharp": "^0.33.5"
   }
 }

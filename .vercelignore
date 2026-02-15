@@ -1,5 +1,0 @@
-server/
-*.sqlite
-uploads/
-scripts/
-*.py
