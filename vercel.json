@@ -1,8 +1,14 @@
 {
     "version": 2,
-    "installCommand": "npm install --prefix client",
-    "buildCommand": "npm run build --prefix client",
-    "outputDirectory": "client/build",
+    "builds": [
+        {
+            "src": "client/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "build"
+            }
+        }
+    ],
     "rewrites": [
         {
             "source": "/(.*)",
