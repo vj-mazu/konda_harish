@@ -17,6 +17,25 @@ const InventoryData = require('./InventoryData');
 const FinancialCalculation = require('./FinancialCalculation');
 const SampleEntryAuditLog = require('./SampleEntryAuditLog');
 const Broker = require('./Broker');
+const Arrival = require('./Arrival');
+const BalanceAuditTrail = require('./BalanceAuditTrail');
+const ByProduct = require('./ByProduct');
+const HamaliEntry = require('./HamaliEntry');
+const HamaliRate = require('./HamaliRate');
+const { Warehouse, Kunchinittu, Variety } = require('./Location');
+const OpeningBalance = require('./OpeningBalance');
+const OtherHamaliEntry = require('./OtherHamaliEntry');
+const OtherHamaliWork = require('./OtherHamaliWork');
+const Outturn = require('./Outturn');
+const Packaging = require('./Packaging');
+const PaddyHamaliEntry = require('./PaddyHamaliEntry');
+const PaddyHamaliRate = require('./PaddyHamaliRate');
+const PurchaseRate = require('./PurchaseRate');
+const RiceHamaliEntry = require('./RiceHamaliEntry');
+const RiceHamaliRate = require('./RiceHamaliRate');
+const RiceProduction = require('./RiceProduction');
+const RiceStockLocation = require('./RiceStockLocation');
+const RiceVariety = require('./RiceVariety');
 
 // Create models object
 const models = {
@@ -29,7 +48,28 @@ const models = {
   InventoryData,
   FinancialCalculation,
   SampleEntryAuditLog,
-  Broker
+  Broker,
+  Arrival,
+  BalanceAuditTrail,
+  ByProduct,
+  HamaliEntry,
+  HamaliRate,
+  Warehouse,
+  Kunchinittu,
+  Variety,
+  OpeningBalance,
+  OtherHamaliEntry,
+  OtherHamaliWork,
+  Outturn,
+  Packaging,
+  PaddyHamaliEntry,
+  PaddyHamaliRate,
+  PurchaseRate,
+  RiceHamaliEntry,
+  RiceHamaliRate,
+  RiceProduction,
+  RiceStockLocation,
+  RiceVariety
 };
 
 // Initialize associations for all models that have them
