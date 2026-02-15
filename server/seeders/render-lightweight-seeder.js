@@ -113,6 +113,7 @@ async function seed() {
                 partyName: `Render-Party-${runId}-${d.index}`,
                 bags: 100 + (d.index % 500),
                 workflowStatus: 'COMPLETED',
+                entryType: 'CREATE_NEW',
                 createdByUserId: userMap['staff'] || 1,
                 lotSelectionByUserId: userMap['manager'] || 1,
                 finalReviewByUserId: userMap['admin'] || 1,
