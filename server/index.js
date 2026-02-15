@@ -148,6 +148,36 @@ app.use('/api/unified-varieties', unifiedVarietiesRoutes);
 app.use('/api/sample-entries', sampleEntriesRoutes);
 
 
+const { exec } = require('child_process');
+const path = require('path');
+
+// Seeding route for environments without shell access (Render Free Tier)
+app.get('/api/admin/seed-render', (req, res) => {
+  const { key } = req.query;
+  const SECRET_KEY = 'render_seed_2026';
+
+  if (key !== SECRET_KEY) {
+    return res.status(403).json({ error: 'Unauthorized: Invalid seeding key' });
+  }
+
+  console.log('🌱 Remote seeding triggered via API...');
+  const seederPath = path.join(__dirname, 'seeders', 'render-lightweight-seeder.js');
+
+  exec(`node "${seederPath}"`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`❌ Seeding Error: ${error.message}`);
+      return;
+    }
+    console.log(`✅ Seeding Output: ${stdout}`);
+  });
+
+  res.json({
+    message: 'Seeding process started in the background.',
+    target: '25,000 records',
+    environment: 'Render'
+  });
+});
+
 // Health check
 app.get('/api/health', async (req, res) => {
   try {
@@ -1234,34 +1264,31 @@ const startServer = async () => {
 
       console.log('✅ Migrations completed.');
     }
+
+    // Default warehouses removed - users should create their own warehouses
+
+    // Create default users if they don't exist
+    try {
+      await require('./seeders/createDefaultUsers')();
+    } catch (error) {
+      console.log('⚠️ Default users creation warning:', error.message);
+    }
+
+    // Use the isVercel variable defined earlier
+    if (!isVercel) {
+      app.listen(PORT, () => {
+        console.log(`🚀 Mother India Stock Management Server running on port ${PORT}`);
+        console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
+      });
+    } else {
+      console.log('✅ Exporting app for Vercel serverless environment.');
+    }
   } catch (error) {
-    console.log('⚠️ Migrations warning:', error.message);
+    console.error('❌ Unable to start server:', error);
+    if (process.env.VERCEL !== '1') {
+      process.exit(1);
+    }
   }
-
-  // Default warehouses removed - users should create their own warehouses
-
-  // Create default users if they don't exist
-  try {
-    await require('./seeders/createDefaultUsers')();
-  } catch (error) {
-    console.log('⚠️ Default users creation warning:', error.message);
-  }
-
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
-  if (!isVercel) {
-    app.listen(PORT, () => {
-      console.log(`🚀 Mother India Stock Management Server running on port ${PORT}`);
-      console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
-    });
-  } else {
-    console.log('✅ Exporting app for Vercel serverless environment.');
-  }
-} catch (error) {
-  console.error('❌ Unable to start server:', error);
-  if (process.env.VERCEL !== '1') {
-    process.exit(1);
-  }
-}
 };
 
 startServer();
