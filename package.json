@@ -2,7 +2,6 @@
   "name": "mother-india-stock-management",
   "version": "1.0.0",
   "description": "Complete stock management system for industrial mill",
-  "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
