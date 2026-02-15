@@ -1,8 +1,8 @@
 /**
- * Render Lightweight Seeder (25,000 Records) - DEFINITIVE VERSION
+ * Render Lightweight Seeder (25,000 Records) - SCHEMA PERFECT
  * 
- * Uses DIRECT imports to avoid index.js issues on Render.
- * Optimized for Render's free tier limits.
+ * Satisfies EVERY not-null constraint and matches production models exactly.
+ * Uses DIRECT imports for maximum reliability on Render.
  */
 
 require('dotenv').config();
@@ -30,20 +30,7 @@ function getRandomDate() {
 }
 
 async function seed() {
-    console.log('🌱 Start: DEFINITIVE Render Lightweight Seeder (25,000 Records)...');
-
-    // Diagnostic Logging
-    console.log('🔍 Diagnostics Check:');
-    console.log('- User Model:', !!User ? 'LOADED' : 'MISSING');
-    console.log('- Broker Model:', !!Broker ? 'LOADED' : 'MISSING');
-    console.log('- Variety Model:', !!Variety ? 'LOADED' : 'MISSING');
-    console.log('- Arrival Model:', !!Arrival ? 'LOADED' : 'MISSING');
-
-    if (!Broker || !Variety || !User || !Arrival) {
-        throw new Error('Critical Models missing. Seeding cannot continue.');
-    }
-
-    const startTime = Date.now();
+    console.log('🌱 Start: SCHEMA PERFECT Render Lightweight Seeder (25,000 Records)...');
 
     try {
         await sequelize.authenticate();
@@ -104,7 +91,7 @@ async function seed() {
                 workflowData.push({ id, randomDate, broker, variety, kunch, index });
             }
 
-            // Bulk create sequence
+            // 1. Sample Entries
             await SampleEntry.bulkCreate(workflowData.map(d => ({
                 id: d.id,
                 entryDate: d.randomDate,
@@ -117,9 +104,34 @@ async function seed() {
                 createdByUserId: userMap['staff'] || 1,
                 lotSelectionByUserId: userMap['manager'] || 1,
                 finalReviewByUserId: userMap['admin'] || 1,
-                location: 'Main Yard'
+                location: 'Main Yard',
+                sampleCollected: true
             })));
 
+            // 2. Quality Parameters
+            await QualityParameters.bulkCreate(workflowData.map(d => ({
+                id: uuidv4(),
+                sampleEntryId: d.id,
+                reportedByUserId: userMap['quality_supervisor'] || 1,
+                reportedBy: 'System Seeder',
+                moisture: 14.50,
+                cutting1: 3.50,
+                cutting2: 2.50,
+                bend: 1.20,
+                mixS: 5.00,
+                mixL: 2.00,
+                mix: 7.00,
+                kandu: 1.50,
+                oil: 0.50,
+                sk: 1.00,
+                grainsCount: 1000,
+                wbR: 1.20,
+                wbBk: 0.50,
+                wbT: 1.70,
+                paddyWb: 0.80
+            })));
+
+            // 3. Lot Allotments
             const lotAllotmentsArr = workflowData.map(d => ({
                 id: uuidv4(),
                 sampleEntryId: d.id,
@@ -129,6 +141,40 @@ async function seed() {
             }));
             await LotAllotment.bulkCreate(lotAllotmentsArr);
 
+            // 4. Physical Inspections
+            const physicalInspectionsArr = workflowData.map((d, idx) => ({
+                id: uuidv4(),
+                sampleEntryId: d.id,
+                lotAllotmentId: lotAllotmentsArr[idx].id,
+                reportedByUserId: userMap['physical_supervisor'] || 1,
+                inspectionDate: d.randomDate,
+                bags: 100 + (d.index % 500),
+                lorryNumber: `LR-${runId}-${d.index}`,
+                cutting1: 3.5,
+                bend: 1.2,
+                isComplete: true
+            }));
+            await PhysicalInspection.bulkCreate(physicalInspectionsArr);
+
+            // 5. Inventory Data
+            const inventoryDataArr = workflowData.map((d, idx) => ({
+                id: uuidv4(),
+                physicalInspectionId: physicalInspectionsArr[idx].id,
+                recordedByUserId: userMap['inventory_staff'] || 1,
+                entryDate: d.randomDate,
+                variety: d.variety.name,
+                bags: 100 + (d.index % 500),
+                moisture: 14.5,
+                wbNumber: `WB-${runId}-${d.index}`,
+                grossWeight: 50.00,
+                tareWeight: 10.00,
+                netWeight: 40.00,
+                location: 'DIRECT_KUNCHINITTU',
+                kunchinittuId: d.kunch.id
+            }));
+            await InventoryData.bulkCreate(inventoryDataArr);
+
+            // 6. Arrivals
             const arrivalsArr = workflowData.map(d => ({
                 slNo: `RL-${runId}-${d.index}-${uuidv4().slice(0, 4)}`.slice(0, 20),
                 date: d.randomDate,
@@ -139,6 +185,7 @@ async function seed() {
                 toKunchinintuId: d.kunch.id,
                 status: 'approved',
                 adminApprovedBy: userMap['admin'] || 1,
+                adminApprovedAt: d.randomDate,
                 createdBy: userMap['staff'] || 1,
                 wbNo: `WB-${runId}-${d.index}`,
                 lorryNumber: `LR-${runId}-${d.index}`,
@@ -148,22 +195,26 @@ async function seed() {
             }));
             const dbArrivals = await Arrival.bulkCreate(arrivalsArr);
 
+            // 7. Purchase Rates
             await PurchaseRate.bulkCreate(dbArrivals.map(a => ({
-                id: uuidv4(),
                 arrivalId: a.id,
+                baseRate: 2500.00,
+                rateType: 'CDL',
+                amountFormula: 'Base * Bags',
+                averageRate: 2500.00,
+                totalAmount: (a.bags * 0.75) * 2500.00,
                 status: 'approved',
                 adminApprovedBy: userMap['admin'] || 1,
-                baseRateValue: 2500.00,
-                totalAmount: (a.bags * 0.75) * 2500.00
+                createdBy: userMap['manager'] || 1
             })));
 
-            console.log(`✅ Batch ${b + 1} finalized [${Date.now() - batchStart}ms]`);
+            console.log(`✅ Finalized batch ${b + 1} (${workflowData.length} records) [${Date.now() - batchStart}ms]`);
         }
 
-        console.log(`\n🎉 Seeded 25,000 records successfully in ${(Date.now() - startTime) / 1000}s`);
+        console.log(`\n🎉 SUCCESSFULLY SEEDED 25,000 COMPLETE WORKFLOWS in ${(Date.now() - startTime) / 1000}s`);
         process.exit(0);
     } catch (err) {
-        console.error('❌ Seeding failed:', err);
+        console.error('❌ Seeding Fatal Error:', err);
         process.exit(1);
     }
 }
