@@ -120,7 +120,13 @@ async function seed() {
                 location: 'Main Yard'
             })));
 
-            const lotAllotmentsArr = workflowData.map(d => ({ id: uuidv4(), sampleEntryId: d.id, allottedToSupervisorId: userMap['physical_supervisor'] || 1 }));
+            const lotAllotmentsArr = workflowData.map(d => ({
+                id: uuidv4(),
+                sampleEntryId: d.id,
+                allottedByManagerId: userMap['manager'] || 1,
+                allottedToSupervisorId: userMap['physical_supervisor'] || 1,
+                allottedAt: d.randomDate
+            }));
             await LotAllotment.bulkCreate(lotAllotmentsArr);
 
             const arrivalsArr = workflowData.map(d => ({
