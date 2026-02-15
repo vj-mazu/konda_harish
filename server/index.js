@@ -864,6 +864,26 @@ const startServer = async () => {
         console.log('⚠️ Migration 60 warning:', error.message);
       }
 
+      // Migration 61: Add stock group index
+      try {
+        const migration61 = require('./migrations/61_add_stock_group_index');
+        const queryInterface = sequelize.getQueryInterface();
+        await migration61.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 61: Stock group index added');
+      } catch (error) {
+        console.log('⚠️ Migration 61 warning:', error.message);
+      }
+
+      // Migration 62: Add performance indexes
+      try {
+        const migration62 = require('./migrations/62_add_performance_indexes');
+        const queryInterface = sequelize.getQueryInterface();
+        await migration62.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 62: Performance indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 62 warning:', error.message);
+      }
+
       // Migration 63: Add rate and amount columns to rice_hamali_entries
       try {
         console.log('🔄 Migration 63: Adding rate and amount columns to rice_hamali_entries...');
@@ -1186,6 +1206,16 @@ const startServer = async () => {
         console.log('✅ Migration 88: kunchinittu_id and outturn_id added to inventory_data');
       } catch (error) {
         console.log('⚠️ Migration 88 warning:', error.message);
+      }
+
+      // Migration 89: Add lot selection fields to sample_entries
+      try {
+        const migration89 = require('./migrations/89_add_lot_selection_fields');
+        const queryInterface = sequelize.getQueryInterface();
+        await migration89.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 89: Lot selection fields added to sample_entries');
+      } catch (error) {
+        console.log('⚠️ Migration 89 warning:', error.message);
       }
 
       // Migration 90: Ultra-Performance Composite Indexes for 10 lakh records
