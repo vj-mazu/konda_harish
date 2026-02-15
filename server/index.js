@@ -211,7 +211,11 @@ const startServer = async () => {
     }
 
     // Run migrations automatically
-    try {
+    const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
+
+    if (isVercel) {
+      console.log('☁️ Running on Vercel: Skipping migrations for performance.');
+    } else {
       console.log('🔄 Running migrations...');
 
       // Migration 0: Fix rate type enum (cleanup)
@@ -1229,27 +1233,35 @@ const startServer = async () => {
       }
 
       console.log('✅ Migrations completed.');
-    } catch (error) {
-      console.log('⚠️ Migrations warning:', error.message);
     }
+  } catch (error) {
+    console.log('⚠️ Migrations warning:', error.message);
+  }
 
-    // Default warehouses removed - users should create their own warehouses
+  // Default warehouses removed - users should create their own warehouses
 
-    // Create default users if they don't exist
-    try {
-      await require('./seeders/createDefaultUsers')();
-    } catch (error) {
-      console.log('⚠️ Default users creation warning:', error.message);
-    }
+  // Create default users if they don't exist
+  try {
+    await require('./seeders/createDefaultUsers')();
+  } catch (error) {
+    console.log('⚠️ Default users creation warning:', error.message);
+  }
 
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
+  if (!isVercel) {
     app.listen(PORT, () => {
       console.log(`🚀 Mother India Stock Management Server running on port ${PORT}`);
       console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
     });
-  } catch (error) {
-    console.error('❌ Unable to start server:', error);
+  } else {
+    console.log('✅ Exporting app for Vercel serverless environment.');
+  }
+} catch (error) {
+  console.error('❌ Unable to start server:', error);
+  if (process.env.VERCEL !== '1') {
     process.exit(1);
   }
+}
 };
 
 startServer();
