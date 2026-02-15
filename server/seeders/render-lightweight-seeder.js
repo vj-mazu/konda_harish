@@ -1,34 +1,27 @@
 /**
- * Render Lightweight Seeder (25,000 Records) - ENHANCED
+ * Render Lightweight Seeder (25,000 Records) - DEFINITIVE VERSION
  * 
- * Optimized for Render's free/starter tier limits.
- * Maintains full workflow: Sample -> Quality -> Lot -> Physical -> Inventory -> Arrival.
- * Includes RiceVarieties for complete frontend experience.
+ * Uses DIRECT imports to avoid index.js issues on Render.
+ * Optimized for Render's free tier limits.
  */
 
 require('dotenv').config();
-const {
-    sequelize,
-    User,
-    Broker,
-    Variety,
-    RiceVariety,
-    Warehouse,
-    Kunchinittu,
-    Outturn,
-    SampleEntry,
-    QualityParameters,
-    LotAllotment,
-    PhysicalInspection,
-    InventoryData,
-    FinancialCalculation,
-    Arrival,
-    PurchaseRate
-} = require('../models');
+const { sequelize } = require('../config/database');
+const User = require('../models/User');
+const Broker = require('../models/Broker');
+const { Warehouse, Kunchinittu, Variety } = require('../models/Location');
+const RiceVariety = require('../models/RiceVariety');
+const SampleEntry = require('../models/SampleEntry');
+const QualityParameters = require('../models/QualityParameters');
+const LotAllotment = require('../models/LotAllotment');
+const PhysicalInspection = require('../models/PhysicalInspection');
+const InventoryData = require('../models/InventoryData');
+const Arrival = require('../models/Arrival');
+const PurchaseRate = require('../models/PurchaseRate');
 const { v4: uuidv4 } = require('uuid');
 
 const TOTAL_WORKFLOWS = 25000;
-const BATCH_SIZE = 500; // Smaller batches for better memory management on free tiers
+const BATCH_SIZE = 500;
 
 function getRandomDate() {
     const start = new Date('2025-01-01').getTime();
@@ -37,7 +30,19 @@ function getRandomDate() {
 }
 
 async function seed() {
-    console.log('🌱 Start: Render Lightweight Seeder (25,000 Records)...');
+    console.log('🌱 Start: DEFINITIVE Render Lightweight Seeder (25,000 Records)...');
+
+    // Diagnostic Logging
+    console.log('🔍 Diagnostics Check:');
+    console.log('- User Model:', !!User ? 'LOADED' : 'MISSING');
+    console.log('- Broker Model:', !!Broker ? 'LOADED' : 'MISSING');
+    console.log('- Variety Model:', !!Variety ? 'LOADED' : 'MISSING');
+    console.log('- Arrival Model:', !!Arrival ? 'LOADED' : 'MISSING');
+
+    if (!Broker || !Variety || !User || !Arrival) {
+        throw new Error('Critical Models missing. Seeding cannot continue.');
+    }
+
     const startTime = Date.now();
 
     try {
@@ -52,8 +57,9 @@ async function seed() {
                 defaults: { username: `user_${role}`, password: 'password123', isActive: true }
             });
         }
+        const users = await User.findAll();
         const userMap = {};
-        (await User.findAll()).forEach(u => { userMap[u.role] = u.id; });
+        users.forEach(u => { userMap[u.role] = u.id; });
 
         // Ensure baseline entities
         if (await Broker.count() < 10) {
@@ -66,7 +72,11 @@ async function seed() {
             await RiceVariety.bulkCreate(Array.from({ length: 5 }).map((_, i) => ({ name: `Rice ${i + 1}`, code: `R${i + 1}`, isActive: true })));
         }
 
-        const wh = await Warehouse.findOne() || await Warehouse.create({ name: 'Default WH', code: 'DWH' });
+        let wh = await Warehouse.findOne();
+        if (!wh) {
+            wh = await Warehouse.create({ name: 'Default WH', code: 'DWH' });
+        }
+
         if (await Kunchinittu.count() < 10) {
             await Kunchinittu.bulkCreate(Array.from({ length: 10 }).map((_, i) => ({ name: `Kunchinittu ${i + 1}`, code: `K${i + 1}`, warehouseId: wh.id, isActive: true })));
         }
@@ -75,15 +85,16 @@ async function seed() {
         const dbVarieties = await Variety.findAll();
         const dbKunch = await Kunchinittu.findAll();
 
-        // 2. Workflow Seeding
         const runId = Date.now().toString().slice(-4);
 
-        for (let b = 0; b < TOTAL_WORKFLOWS / BATCH_SIZE; b++) {
+        for (let b = 0; b < Math.ceil(TOTAL_WORKFLOWS / BATCH_SIZE); b++) {
             const batchStart = Date.now();
             const workflowData = [];
 
             for (let i = 0; i < BATCH_SIZE; i++) {
                 const index = (b * BATCH_SIZE) + i;
+                if (index >= TOTAL_WORKFLOWS) break;
+
                 const id = uuidv4();
                 const randomDate = getRandomDate();
                 const broker = dbBrokers[index % dbBrokers.length];
@@ -93,7 +104,7 @@ async function seed() {
                 workflowData.push({ id, randomDate, broker, variety, kunch, index });
             }
 
-            // Bulk create Sample Entries first
+            // Bulk create sequence
             await SampleEntry.bulkCreate(workflowData.map(d => ({
                 id: d.id,
                 entryDate: d.randomDate,
@@ -104,36 +115,15 @@ async function seed() {
                 workflowStatus: 'COMPLETED',
                 createdByUserId: userMap['staff'] || 1,
                 lotSelectionByUserId: userMap['manager'] || 1,
-                finalReviewByUserId: userMap['admin'] || 1
+                finalReviewByUserId: userMap['admin'] || 1,
+                location: 'Main Yard'
             })));
 
-            const qualityParamsArr = workflowData.map(d => ({ id: uuidv4(), sampleEntryId: d.id, reportedBy: 'Light Seeder', moisture: 14.5 }));
             const lotAllotmentsArr = workflowData.map(d => ({ id: uuidv4(), sampleEntryId: d.id, allottedToSupervisorId: userMap['physical_supervisor'] || 1 }));
-            await QualityParameters.bulkCreate(qualityParamsArr);
             await LotAllotment.bulkCreate(lotAllotmentsArr);
 
-            const physicalInspectionsArr = workflowData.map((d, idx) => ({
-                id: uuidv4(),
-                sampleEntryId: d.id,
-                lotAllotmentId: lotAllotmentsArr[idx].id,
-                bags: 100 + (d.index % 500),
-                lorryNumber: `LR-${runId}-${d.index}`,
-                isComplete: true
-            }));
-            await PhysicalInspection.bulkCreate(physicalInspectionsArr);
-
-            const inventoryDataArr = workflowData.map((d, idx) => ({
-                id: uuidv4(),
-                physicalInspectionId: physicalInspectionsArr[idx].id,
-                variety: d.variety.name,
-                bags: 100 + (d.index % 500),
-                kunchinittuId: d.kunch.id
-            }));
-            await InventoryData.bulkCreate(inventoryDataArr);
-
             const arrivalsArr = workflowData.map(d => ({
-                id: uuidv4(),
-                slNo: `RL-${runId}-${d.index}`.slice(0, 20),
+                slNo: `RL-${runId}-${d.index}-${uuidv4().slice(0, 4)}`.slice(0, 20),
                 date: d.randomDate,
                 movementType: 'purchase',
                 broker: d.broker.name,
@@ -141,7 +131,13 @@ async function seed() {
                 bags: 100 + (d.index % 500),
                 toKunchinintuId: d.kunch.id,
                 status: 'approved',
-                adminApprovedBy: userMap['admin'] || 1
+                adminApprovedBy: userMap['admin'] || 1,
+                createdBy: userMap['staff'] || 1,
+                wbNo: `WB-${runId}-${d.index}`,
+                lorryNumber: `LR-${runId}-${d.index}`,
+                grossWeight: 50.00,
+                tareWeight: 10.00,
+                netWeight: 40.00
             }));
             const dbArrivals = await Arrival.bulkCreate(arrivalsArr);
 
@@ -151,13 +147,13 @@ async function seed() {
                 status: 'approved',
                 adminApprovedBy: userMap['admin'] || 1,
                 baseRateValue: 2500.00,
-                totalAmount: (a.bags * 0.75) * 2500.00 // Approx weight calc
+                totalAmount: (a.bags * 0.75) * 2500.00
             })));
 
-            console.log(`✅ Batch ${b + 1}/${TOTAL_WORKFLOWS / BATCH_SIZE} seeded [${Date.now() - batchStart}ms]`);
+            console.log(`✅ Batch ${b + 1} finalized [${Date.now() - batchStart}ms]`);
         }
 
-        console.log(`\n🎉 Seeded 25,000 workflows successfully in ${(Date.now() - startTime) / 1000}s`);
+        console.log(`\n🎉 Seeded 25,000 records successfully in ${(Date.now() - startTime) / 1000}s`);
         process.exit(0);
     } catch (err) {
         console.error('❌ Seeding failed:', err);
