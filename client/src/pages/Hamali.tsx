@@ -599,7 +599,7 @@ const Hamali: React.FC = () => {
           params: {
             dateFrom: hamaliDate,
             dateTo: hamaliDate,
-            limit: 1000
+            limit: 200
             // FIXED: Don't filter by approval status - admin movements are auto-approved
           }
         });

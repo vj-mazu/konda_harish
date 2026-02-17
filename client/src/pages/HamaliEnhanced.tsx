@@ -274,19 +274,19 @@ const HamaliEnhanced: React.FC = () => {
         dateFrom,
         dateTo,
         page: 1,
-        limit: 1000
+        limit: 200
       };
 
       const response = await axios.get<{ records: { [key: string]: Arrival[] } }>('/records/arrivals', { params });
-      
+
       if (response.data.records) {
         setRecords(response.data.records);
-        
+
         // Fetch hamali entries for all arrivals
         const allArrivalIds = Object.values(response.data.records)
           .flat()
           .map((record: Arrival) => record.id);
-        
+
         if (allArrivalIds.length > 0) {
           if (activeTab === 'paddy') {
             await fetchPaddyHamaliEntries(allArrivalIds);
@@ -467,7 +467,7 @@ const HamaliEnhanced: React.FC = () => {
                       <tbody>
                         {dateRecords.map((record) => {
                           const hamaliStatus = getHamaliStatus(record.id);
-                          
+
                           return (
                             <tr key={record.id}>
                               <Td>{record.slNo}</Td>
@@ -479,10 +479,10 @@ const HamaliEnhanced: React.FC = () => {
                               <Td>{record.lorryNumber}</Td>
                               <Td>
                                 {hamaliStatus.hasEntries ? (
-                                  <div style={{ 
-                                    background: '#d1fae5', 
-                                    color: '#059669', 
-                                    padding: '0.5rem', 
+                                  <div style={{
+                                    background: '#d1fae5',
+                                    color: '#059669',
+                                    padding: '0.5rem',
                                     borderRadius: '6px',
                                     fontWeight: '600',
                                     textAlign: 'center'
@@ -492,10 +492,10 @@ const HamaliEnhanced: React.FC = () => {
                                     ₹{hamaliStatus.totalAmount.toFixed(2)}
                                   </div>
                                 ) : (
-                                  <div style={{ 
-                                    background: '#fee2e2', 
-                                    color: '#dc2626', 
-                                    padding: '0.5rem', 
+                                  <div style={{
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    padding: '0.5rem',
                                     borderRadius: '6px',
                                     fontWeight: '600',
                                     textAlign: 'center'
@@ -505,12 +505,12 @@ const HamaliEnhanced: React.FC = () => {
                                 )}
                               </Td>
                               <Td>
-                                <Button 
+                                <Button
                                   className="primary"
-                                  style={{ 
+                                  style={{
                                     padding: '0.5rem 1rem',
                                     fontSize: '0.9rem',
-                                    background: hamaliStatus.hasEntries 
+                                    background: hamaliStatus.hasEntries
                                       ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
                                       : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                                   }}

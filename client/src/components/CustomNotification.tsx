@@ -64,8 +64,8 @@ const getGradient = (type: 'success' | 'error' | 'warning' | 'info'): string => 
 };
 
 // Individual notification card with gradient background
-const NotificationCard = styled.div<{ type: 'success' | 'error' | 'warning' | 'info'; isClosing: boolean }>`
-  background: ${props => getGradient(props.type)};
+const NotificationCard = styled.div<{ $type: 'success' | 'error' | 'warning' | 'info'; $isClosing: boolean }>`
+  background: ${props => getGradient(props.$type)};
   border-radius: 12px;
   padding: 18px 22px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -74,7 +74,7 @@ const NotificationCard = styled.div<{ type: 'success' | 'error' | 'warning' | 'i
   gap: 12px;
   pointer-events: auto;
   cursor: pointer;
-  animation: ${props => props.isClosing ? fadeOut : slideIn} 0.3s ease-out;
+  animation: ${props => props.$isClosing ? fadeOut : slideIn} 0.3s ease-out;
   position: relative;
   min-height: 60px;
   max-width: 100%;
@@ -88,7 +88,7 @@ const NotificationCard = styled.div<{ type: 'success' | 'error' | 'warning' | 'i
   }
 `;
 
-const IconWrapper = styled.div<{ type: 'success' | 'error' | 'warning' | 'info' }>`
+const IconWrapper = styled.div<{ $type: 'success' | 'error' | 'warning' | 'info' }>`
   font-size: 24px;
   font-weight: bold;
   flex-shrink: 0;
@@ -104,7 +104,7 @@ const IconWrapper = styled.div<{ type: 'success' | 'error' | 'warning' | 'info' 
   -webkit-backdrop-filter: blur(10px);
 `;
 
-const MessageText = styled.div<{ type: 'success' | 'error' | 'warning' | 'info' }>`
+const MessageText = styled.div<{ $type: 'success' | 'error' | 'warning' | 'info' }>`
   flex: 1;
   font-size: 15px;
   font-weight: 600;
@@ -139,14 +139,14 @@ const CloseButton = styled.button`
   }
 `;
 
-const ProgressBar = styled.div<{ type: 'success' | 'error' | 'warning' | 'info'; duration: number }>`
+const ProgressBar = styled.div<{ $type: 'success' | 'error' | 'warning' | 'info'; $duration: number }>`
   position: absolute;
   bottom: 0;
   left: 0;
   height: 4px;
   background: rgba(255, 255, 255, 0.4);
   border-radius: 0 0 0 12px;
-  animation: shrink ${props => props.duration}ms linear;
+  animation: shrink ${props => props.$duration}ms linear;
 
   @keyframes shrink {
     from {
@@ -204,18 +204,18 @@ const Notification: React.FC<NotificationProps> = ({ id, message, type, duration
 
   return (
     <NotificationCard
-      type={type}
-      isClosing={isClosing}
+      $type={type}
+      $isClosing={isClosing}
       onClick={handleClose}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <IconWrapper type={type}>{getIcon()}</IconWrapper>
-      <MessageText type={type}>{message}</MessageText>
+      <IconWrapper $type={type}>{getIcon()}</IconWrapper>
+      <MessageText $type={type}>{message}</MessageText>
       <CloseButton onClick={(e) => { e.stopPropagation(); handleClose(); }}>
         ×
       </CloseButton>
-      {!isPaused && <ProgressBar type={type} duration={duration} />}
+      {!isPaused && <ProgressBar $type={type} $duration={duration} />}
     </NotificationCard>
   );
 };

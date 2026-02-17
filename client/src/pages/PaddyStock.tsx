@@ -326,25 +326,25 @@ const PaddyStock: React.FC = () => {
   ): RemainingInProduction[] => {
     try {
       const remaining: RemainingInProduction[] = [];
-      
+
       // Get current date and calculate first day of current month
       const currentDate = new Date(currentDay.date + 'T00:00:00');
       const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      
+
       const firstDayOfMonthStr = firstDayOfMonth.toISOString().split('T')[0];
       const lastDayOfMonthStr = lastDayOfMonth.toISOString().split('T')[0];
-      
+
       // Filter days to ONLY include current month (from 1st to last day of month)
       // This ensures we start from 0 each month
       const currentMonthDays = allDays.filter(day => {
         return day.date >= firstDayOfMonthStr && day.date <= lastDayOfMonthStr;
       });
-      
+
       // Calculate month-wise totals: production shifting - rice production
       // Starting from 0 for the current month
       const monthWiseTotals: { [key: string]: { shifted: number; consumed: number } } = {};
-      
+
       currentMonthDays.forEach(day => {
         // Only process days up to and including the current day
         if (day.date <= currentDay.date) {
@@ -358,7 +358,7 @@ const PaddyStock: React.FC = () => {
               monthWiseTotals[key].shifted += entry.bags || 0;
             });
           }
-          
+
           // Sum rice production consumption for this month
           if (day.riceProduction && day.riceProduction.length > 0) {
             day.riceProduction.forEach(entry => {
@@ -371,12 +371,12 @@ const PaddyStock: React.FC = () => {
           }
         }
       });
-      
+
       // Calculate remaining bags (shifted - consumed) for current month ONLY
       Object.entries(monthWiseTotals).forEach(([key, totals]) => {
         const [variety, outturnCode] = key.split('-');
         const remainingBags = totals.shifted - totals.consumed;
-        
+
         if (remainingBags > 0) {
           remaining.push({
             variety: variety,
@@ -422,19 +422,19 @@ const PaddyStock: React.FC = () => {
       const response = await axios.get(`/ledger/paddy-stock/${selectedKunchinittu}`, { params });
       const data = response.data as any;
       const allDays = data.dailyLedger || [];
-      
+
       // Store all data and implement client-side pagination
       setAllDailyLedger(allDays);
       setCurrentPage(1); // Reset to first page
-      
+
       // Show first page
       const startIndex = 0;
       const endIndex = recordsPerPage;
       const paginatedDays = allDays.slice(startIndex, endIndex);
-      
+
       setDailyLedger(paginatedDays);
       setKunchinittuInfo(data.kunchinittu);
-      
+
       if (allDays.length > recordsPerPage) {
         toast.success(`📊 Loaded ${allDays.length} days. Showing first ${paginatedDays.length} days.`);
       }
@@ -454,12 +454,12 @@ const PaddyStock: React.FC = () => {
   const handlePageChange = (newPage: number) => {
     const totalPages = Math.ceil(allDailyLedger.length / recordsPerPage);
     if (newPage < 1 || newPage > totalPages) return;
-    
+
     setCurrentPage(newPage);
     const startIndex = (newPage - 1) * recordsPerPage;
     const endIndex = startIndex + recordsPerPage;
     const paginatedDays = allDailyLedger.slice(startIndex, endIndex);
-    
+
     setDailyLedger(paginatedDays);
     toast.info(`📄 Page ${newPage} of ${totalPages} (${paginatedDays.length} days)`);
   };
@@ -467,7 +467,7 @@ const PaddyStock: React.FC = () => {
   return (
     <>
       <Title>📊 Paddy Stock Ledger</Title>
-      
+
       <FilterSection>
         <FilterRow>
           <FormGroup>
@@ -511,16 +511,16 @@ const PaddyStock: React.FC = () => {
             {loading ? 'Loading...' : '🔍 View Stock'}
           </Button>
 
-          <Button 
-            className="secondary" 
+          <Button
+            className="secondary"
             onClick={() => {
               if (!selectedKunchinittu) {
                 toast.error('Please select a Kunchinittu');
                 return;
               }
-              
+
               setLoading(true);
-              const params: any = { limit: 1000 }; // Load more records but still manageable
+              const params: any = { limit: 200 }; // PERFORMANCE: Reduced from 1000 for 10L scale
               if (dateFrom) params.dateFrom = dateFrom.toISOString().split('T')[0];
               if (dateTo) params.dateTo = dateTo.toISOString().split('T')[0];
 
@@ -528,15 +528,15 @@ const PaddyStock: React.FC = () => {
                 .then(response => {
                   const data = response.data as any;
                   const allDays = data.dailyLedger || [];
-                  
+
                   // Store all data and show first page
                   setAllDailyLedger(allDays);
                   setCurrentPage(1);
-                  
+
                   const paginatedDays = allDays.slice(0, recordsPerPage);
                   setDailyLedger(paginatedDays);
                   setKunchinittuInfo(data.kunchinittu);
-                  
+
                   if (allDays.length > recordsPerPage) {
                     toast.success(`📊 Loaded ${allDays.length} days. Showing first ${paginatedDays.length} days with pagination.`);
                   } else {
@@ -566,193 +566,193 @@ const PaddyStock: React.FC = () => {
       <Container>
         <MainContent>
           {dailyLedger.map((day, dayIdx) => {
-        // Get outturn bifurcation from opening stock (bags that are in outturns)
-        const outturnBifurcation = day.openingStock.filter(stock => stock.outturnCode);
-        // Get kunchinittu bifurcation from opening stock (bags that are NOT in outturns)
-        const kunchinintuBifurcation = day.openingStock.filter(stock => !stock.outturnCode);
+            // Get outturn bifurcation from opening stock (bags that are in outturns)
+            const outturnBifurcation = day.openingStock.filter(stock => stock.outturnCode);
+            // Get kunchinittu bifurcation from opening stock (bags that are NOT in outturns)
+            const kunchinintuBifurcation = day.openingStock.filter(stock => !stock.outturnCode);
 
-        return (
-          <DaySection key={dayIdx}>
-            <DateHeader>{formatDate(day.date)}</DateHeader>
+            return (
+              <DaySection key={dayIdx}>
+                <DateHeader>{formatDate(day.date)}</DateHeader>
 
-            {/* Kunchinittu Bifurcation - ALL opening stock items in GREEN BACKGROUND */}
-            {day.openingStock.length > 0 && (
-              <div style={{ 
-                background: '#d1fae5', 
-                padding: '0.5rem 1.5rem'
-              }}>
-                {day.openingStock.map((stock, idx) => (
-                  <div key={idx} style={{
-                    fontWeight: 'normal',
-                    color: '#000',
-                    padding: '0.25rem 0',
-                    fontFamily: 'Calibri, sans-serif',
-                    fontSize: '11pt'
+                {/* Kunchinittu Bifurcation - ALL opening stock items in GREEN BACKGROUND */}
+                {day.openingStock.length > 0 && (
+                  <div style={{
+                    background: '#d1fae5',
+                    padding: '0.5rem 1.5rem'
                   }}>
-                    {stock.bags} - {stock.variety} - {stock.outturnCode ? (
-                      <span style={{ fontWeight: 'bold' }}>{stock.outturnCode}</span>
-                    ) : (
-                      <span
-                        onClick={() => {
-                          if (kunchinittuInfo?.code) {
-                            const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
-                            window.open(url, '_blank');
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          color: '#2563eb',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        {kunchinittuInfo?.code}
-                      </span>
-                    )}({stock.warehouse || kunchinittuInfo?.warehouse.name})
+                    {day.openingStock.map((stock, idx) => (
+                      <div key={idx} style={{
+                        fontWeight: 'normal',
+                        color: '#000',
+                        padding: '0.25rem 0',
+                        fontFamily: 'Calibri, sans-serif',
+                        fontSize: '11pt'
+                      }}>
+                        {stock.bags} - {stock.variety} - {stock.outturnCode ? (
+                          <span style={{ fontWeight: 'bold' }}>{stock.outturnCode}</span>
+                        ) : (
+                          <span
+                            onClick={() => {
+                              if (kunchinittuInfo?.code) {
+                                const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
+                                window.open(url, '_blank');
+                              }
+                            }}
+                            style={{
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              color: '#2563eb',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {kunchinittuInfo?.code}
+                          </span>
+                        )}({stock.warehouse || kunchinittuInfo?.warehouse.name})
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          
-          {/* Show total of opening stock */}
-          {day.openingStock.length > 0 && (
-            <div style={{ 
-              fontWeight: 'bold', 
-              padding: '0.5rem 1.5rem',
-              background: '#f8f9fa',
-              borderBottom: '1px solid #ddd'
-            }}>
-              {day.openingStock.reduce((sum, stock) => sum + stock.bags, 0)}
-            </div>
-          )}
-          
-          <OpeningTotal>{day.openingTotal} Opening Stock</OpeningTotal>
+                )}
 
-          {/* Bifurcation - Inward (Highlighted) */}
-          {day.inward.length > 0 && (
-            <BifurcationSection>
-              {day.inward.map((entry, idx) => (
-                <BifurcationItem key={idx}>
-                  <div className="bags">+{entry.bags}</div>
-                  <div>{formatDate(day.date)}</div>
-                  <div className="variety">{entry.variety}</div>
-                  <div>{entry.broker || entry.from}</div>
-                  <div>
-                    {entry.outturnCode ? `${entry.outturnCode}(${entry.warehouse || kunchinittuInfo?.warehouse.name})` : entry.to}
+                {/* Show total of opening stock */}
+                {day.openingStock.length > 0 && (
+                  <div style={{
+                    fontWeight: 'bold',
+                    padding: '0.5rem 1.5rem',
+                    background: '#f8f9fa',
+                    borderBottom: '1px solid #ddd'
+                  }}>
+                    {day.openingStock.reduce((sum, stock) => sum + stock.bags, 0)}
                   </div>
-                </BifurcationItem>
-              ))}
-            </BifurcationSection>
-          )}
+                )}
 
-          {/* Bifurcation - Production Shifting (Highlighted in orange) */}
-          {day.productionShifting && day.productionShifting.length > 0 && (
-            <div style={{ background: '#ffedd5', padding: '1rem 1.5rem' }}>
-              {day.productionShifting.map((entry, idx) => (
-                <BifurcationItem key={idx} style={{ borderLeft: '4px solid #f97316' }}>
-                  <div className="bags" style={{ color: '#f97316' }}>(-) {entry.bags}</div>
-                  <div className="variety">{entry.variety}</div>
-                  <div>{entry.from}</div>
-                  <div>
-                    <span style={{ color: '#9a3412', fontWeight: 'bold' }}>
-                      {entry.to}
-                    </span>
+                <OpeningTotal>{day.openingTotal} Opening Stock</OpeningTotal>
+
+                {/* Bifurcation - Inward (Highlighted) */}
+                {day.inward.length > 0 && (
+                  <BifurcationSection>
+                    {day.inward.map((entry, idx) => (
+                      <BifurcationItem key={idx}>
+                        <div className="bags">+{entry.bags}</div>
+                        <div>{formatDate(day.date)}</div>
+                        <div className="variety">{entry.variety}</div>
+                        <div>{entry.broker || entry.from}</div>
+                        <div>
+                          {entry.outturnCode ? `${entry.outturnCode}(${entry.warehouse || kunchinittuInfo?.warehouse.name})` : entry.to}
+                        </div>
+                      </BifurcationItem>
+                    ))}
+                  </BifurcationSection>
+                )}
+
+                {/* Bifurcation - Production Shifting (Highlighted in orange) */}
+                {day.productionShifting && day.productionShifting.length > 0 && (
+                  <div style={{ background: '#ffedd5', padding: '1rem 1.5rem' }}>
+                    {day.productionShifting.map((entry, idx) => (
+                      <BifurcationItem key={idx} style={{ borderLeft: '4px solid #f97316' }}>
+                        <div className="bags" style={{ color: '#f97316' }}>(-) {entry.bags}</div>
+                        <div className="variety">{entry.variety}</div>
+                        <div>{entry.from}</div>
+                        <div>
+                          <span style={{ color: '#9a3412', fontWeight: 'bold' }}>
+                            {entry.to}
+                          </span>
+                        </div>
+                      </BifurcationItem>
+                    ))}
                   </div>
-                </BifurcationItem>
-              ))}
-            </div>
-          )}
+                )}
 
-          {/* Bifurcation - Outward (Highlighted in purple for normal shifting) */}
-          {day.outward.length > 0 && (
-            <div style={{ background: '#e9d5ff', padding: '1rem 1.5rem' }}>
-              {day.outward.map((entry, idx) => (
-                <BifurcationItem key={idx} style={{ borderLeft: '4px solid #a855f7' }}>
-                  <div className="bags" style={{ color: '#a855f7' }}>-{entry.bags}</div>
-                  <div>{formatDate(day.date)}</div>
-                  <div className="variety">{entry.variety}</div>
-                  <div>{entry.from}</div>
-                  <div>{entry.to}</div>
-                </BifurcationItem>
-              ))}
-            </div>
-          )}
-
-          {/* Closing Stock */}
-          <ClosingSection>
-            {day.closingStock.map((stock, idx) => (
-              <ClosingItem key={idx}>
-                <div>
-                  {stock.bags} - {stock.variety} - {stock.outturnCode ? (
-                    <>
-                      {stock.outturnCode}(
-                      <span
-                        onClick={() => {
-                          if (kunchinittuInfo?.code) {
-                            const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
-                            window.open(url, '_blank');
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          color: '#2563eb',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        {stock.warehouse || kunchinittuInfo?.warehouse.name}
-                      </span>)
-                    </>
-                  ) : (
-                    <>
-                      (
-                      <span
-                        onClick={() => {
-                          if (kunchinittuInfo?.code) {
-                            const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
-                            window.open(url, '_blank');
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          color: '#2563eb',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        {stock.warehouse || kunchinittuInfo?.warehouse.name}
-                      </span>)
-                    </>
-                  )}
-                </div>
-                <div></div>
-              </ClosingItem>
-            ))}
-            <div style={{ fontWeight: 'bold', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid #ddd' }}>
-              {day.closingTotal} Closing Stock
-            </div>
-          </ClosingSection>
-
-          {/* Rice Production Consumption - MOVED TO BOTTOM (Working Section) */}
-          {day.riceProduction && day.riceProduction.length > 0 && (
-            <div style={{ background: '#fee2e2', padding: '1rem 1.5rem' }}>
-              {day.riceProduction.map((entry, idx) => (
-                <BifurcationItem key={idx} style={{ borderLeft: '4px solid #dc2626', background: 'white' }}>
-                  <div className="bags" style={{ color: '#dc2626' }}>(-){entry.bags}</div>
-                  <div className="variety">{entry.variety}</div>
-                  <div style={{ fontWeight: 'bold', color: '#991b1b' }}>
-                    {entry.outturnCode}
+                {/* Bifurcation - Outward (Highlighted in purple for normal shifting) */}
+                {day.outward.length > 0 && (
+                  <div style={{ background: '#e9d5ff', padding: '1rem 1.5rem' }}>
+                    {day.outward.map((entry, idx) => (
+                      <BifurcationItem key={idx} style={{ borderLeft: '4px solid #a855f7' }}>
+                        <div className="bags" style={{ color: '#a855f7' }}>-{entry.bags}</div>
+                        <div>{formatDate(day.date)}</div>
+                        <div className="variety">{entry.variety}</div>
+                        <div>{entry.from}</div>
+                        <div>{entry.to}</div>
+                      </BifurcationItem>
+                    ))}
                   </div>
-                  <div style={{ color: '#991b1b' }}>
-                    → Rice Production
+                )}
+
+                {/* Closing Stock */}
+                <ClosingSection>
+                  {day.closingStock.map((stock, idx) => (
+                    <ClosingItem key={idx}>
+                      <div>
+                        {stock.bags} - {stock.variety} - {stock.outturnCode ? (
+                          <>
+                            {stock.outturnCode}(
+                            <span
+                              onClick={() => {
+                                if (kunchinittuInfo?.code) {
+                                  const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
+                                  window.open(url, '_blank');
+                                }
+                              }}
+                              style={{
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                color: '#2563eb',
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              {stock.warehouse || kunchinittuInfo?.warehouse.name}
+                            </span>)
+                          </>
+                        ) : (
+                          <>
+                            (
+                            <span
+                              onClick={() => {
+                                if (kunchinittuInfo?.code) {
+                                  const url = `/kunchinittu-ledger?code=${kunchinittuInfo.code}`;
+                                  window.open(url, '_blank');
+                                }
+                              }}
+                              style={{
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                color: '#2563eb',
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              {stock.warehouse || kunchinittuInfo?.warehouse.name}
+                            </span>)
+                          </>
+                        )}
+                      </div>
+                      <div></div>
+                    </ClosingItem>
+                  ))}
+                  <div style={{ fontWeight: 'bold', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid #ddd' }}>
+                    {day.closingTotal} Closing Stock
                   </div>
-                </BifurcationItem>
-              ))}
-            </div>
-          )}
-        </DaySection>
-        );
-      })}
+                </ClosingSection>
+
+                {/* Rice Production Consumption - MOVED TO BOTTOM (Working Section) */}
+                {day.riceProduction && day.riceProduction.length > 0 && (
+                  <div style={{ background: '#fee2e2', padding: '1rem 1.5rem' }}>
+                    {day.riceProduction.map((entry, idx) => (
+                      <BifurcationItem key={idx} style={{ borderLeft: '4px solid #dc2626', background: 'white' }}>
+                        <div className="bags" style={{ color: '#dc2626' }}>(-){entry.bags}</div>
+                        <div className="variety">{entry.variety}</div>
+                        <div style={{ fontWeight: 'bold', color: '#991b1b' }}>
+                          {entry.outturnCode}
+                        </div>
+                        <div style={{ color: '#991b1b' }}>
+                          → Rice Production
+                        </div>
+                      </BifurcationItem>
+                    ))}
+                  </div>
+                )}
+              </DaySection>
+            );
+          })}
 
           {dailyLedger.length === 0 && !loading && (
             <div style={{ textAlign: 'center', padding: '3rem', background: 'white', borderRadius: '12px' }}>
@@ -780,7 +780,7 @@ const PaddyStock: React.FC = () => {
               >
                 « First
               </Button>
-              
+
               <Button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
@@ -812,7 +812,7 @@ const PaddyStock: React.FC = () => {
               >
                 Next ›
               </Button>
-              
+
               <Button
                 onClick={() => handlePageChange(Math.ceil(allDailyLedger.length / recordsPerPage))}
                 disabled={currentPage >= Math.ceil(allDailyLedger.length / recordsPerPage)}
@@ -868,7 +868,7 @@ const PaddyStock: React.FC = () => {
               if (latestDay && latestDay.openingStock.length > 0) {
                 // Group by variety ONLY (sum all bags for same variety)
                 const varietyMap: { [variety: string]: number } = {};
-                
+
                 latestDay.openingStock.forEach(stock => {
                   if (!varietyMap[stock.variety]) {
                     varietyMap[stock.variety] = 0;

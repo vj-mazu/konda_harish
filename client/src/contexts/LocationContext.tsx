@@ -79,7 +79,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const fetchWarehouses = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/locations/warehouses');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/locations/warehouses', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = response.data as { warehouses: Warehouse[] };
       setWarehouses(data.warehouses || []);
     } catch (error) {
@@ -92,7 +95,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const fetchKunchinittus = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/locations/kunchinittus');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/locations/kunchinittus', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = response.data as { kunchinittus: Kunchinittu[] };
       console.log('📊 Fetched kunchinittus:', data.kunchinittus);
       setKunchinittus(data.kunchinittus || []);
@@ -106,7 +112,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const fetchVarieties = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/locations/varieties');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/locations/varieties', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = response.data as { varieties: Variety[] };
       setVarieties(data.varieties || []);
     } catch (error) {
@@ -119,7 +128,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const fetchRiceVarieties = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/locations/rice-varieties');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/locations/rice-varieties', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = response.data as { varieties: RiceVariety[] };
       setRiceVarieties(data.varieties || []);
     } catch (error) {
@@ -131,7 +143,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const createWarehouse = async (data: Partial<Warehouse>): Promise<Warehouse> => {
     try {
-      const response = await axios.post('/locations/warehouses', data);
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/locations/warehouses', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const responseData = response.data as { warehouse: Warehouse };
       const newWarehouse = responseData.warehouse;
       setWarehouses(prev => [...prev, newWarehouse]);
@@ -144,7 +159,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const createKunchinittu = async (data: Partial<Kunchinittu>): Promise<Kunchinittu> => {
     try {
-      const response = await axios.post('/locations/kunchinittus', data);
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/locations/kunchinittus', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const responseData = response.data as { kunchinittu: Kunchinittu };
       const newKunchinittu = responseData.kunchinittu;
       setKunchinittus(prev => [...prev, newKunchinittu]);
@@ -157,7 +175,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const createVariety = async (data: Partial<Variety>): Promise<Variety> => {
     try {
-      const response = await axios.post('/locations/varieties', data);
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/locations/varieties', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const responseData = response.data as { variety: Variety };
       const newVariety = responseData.variety;
       setVarieties(prev => [...prev, newVariety]);
@@ -170,7 +191,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const createRiceVariety = async (data: Partial<RiceVariety>): Promise<RiceVariety> => {
     try {
-      const response = await axios.post('/locations/rice-varieties', data);
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/locations/rice-varieties', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const responseData = response.data as { variety: RiceVariety };
       const newVariety = responseData.variety;
       setRiceVarieties(prev => [...prev, newVariety]);

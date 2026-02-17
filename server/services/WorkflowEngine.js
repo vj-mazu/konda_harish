@@ -63,7 +63,7 @@ const WORKFLOW_TRANSITIONS = [
   },
   {
     fromStatus: 'COOKING_REPORT',
-    toStatus: 'FINAL_REVIEW',
+    toStatus: 'FINAL_REPORT',
     allowedRoles: ['admin', 'manager'],
     requiredData: ['cookingReport']
   },
@@ -159,10 +159,15 @@ class WorkflowEngine {
 
       const fromStatus = sampleEntry.workflowStatus;
 
-      console.log(`Workflow transition: ${fromStatus} -> ${toStatus}, role: ${userRole}`);
+      console.log(`[WORKFLOW] Attempting transition for entry ${sampleEntryId}: ${fromStatus} -> ${toStatus} (User: ${userId}, Role: ${userRole})`);
 
       // Check if transition is allowed
       if (!this.canTransition(fromStatus, toStatus, userRole)) {
+        console.error(`[WORKFLOW] Transition REJECTED: ${fromStatus} -> ${toStatus} not allowed for role: ${userRole}`);
+        // Log all allowed transitions for this status and role to help debug
+        const allowed = this.getNextAllowedStatuses(fromStatus, userRole);
+        console.error(`[WORKFLOW] Allowed next statuses for ${fromStatus} and ${userRole}: ${allowed.join(', ') || 'NONE'}`);
+
         throw new Error(`Transition from ${fromStatus} to ${toStatus} not allowed for role ${userRole}`);
       }
 

@@ -17,6 +17,156 @@ interface Variety {
   name: string;
 }
 
+// Helper Component for Ledger Row with Sub-Row support
+const EntryRow: React.FC<{
+  entry: any;
+  index: number;
+  page: number;
+  pageSize: number;
+  isAdminOrManager: boolean;
+  openEditModal: (entry: any) => void;
+  cellStyle: React.CSSProperties;
+}> = ({ entry, index, page, pageSize, isAdminOrManager, openEditModal, cellStyle }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const inspections = entry.lotAllotment?.physicalInspections || [];
+  const hasMultipleLorries = inspections.length > 1;
+
+  // Aggregate Data for Main Row
+  const totalActualBags = inspections.reduce((sum: number, insp: any) => sum + Number(insp.bags || 0), 0);
+  const lorryNumbers = inspections.map((insp: any) => insp.lorryNumber).filter(Boolean).join(', ');
+  const allInventory = inspections.map((insp: any) => insp.inventoryData).filter(Boolean);
+  const totalGrossWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.grossWeight || 0), 0);
+  const totalTareWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.tareWeight || 0), 0);
+  const totalNetWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.netWeight || 0), 0);
+
+  const financialCalc = allInventory.find((inv: any) => inv.financialCalculation)?.financialCalculation;
+  const totalAmount = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.financialCalculation?.totalAmount || 0), 0);
+  const avgRate = totalNetWeight > 0 ? (totalAmount / totalNetWeight * 100) : 0;
+
+  const entryNumber = `A${String((page - 1) * pageSize + index + 1).padStart(2, '0')}`;
+
+  const rateSummary = financialCalc ? (() => {
+    const parts: string[] = [];
+    if (financialCalc.suteRate && Number(financialCalc.suteRate) > 0) parts.push(`S: ${financialCalc.suteRate} ${financialCalc.suteType === 'PER_BAG' ? '/bag' : '/ton'}`);
+    if (financialCalc.baseRateValue) parts.push(`BR: ₹${Number(financialCalc.baseRateValue).toLocaleString()} ${financialCalc.baseRateUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
+    if (financialCalc.brokerageRate && Number(financialCalc.brokerageRate) > 0) parts.push(`B: ${financialCalc.brokerageRate} ${financialCalc.brokerageUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
+    if (financialCalc.hamaliRate && Number(financialCalc.hamaliRate) > 0) parts.push(`H: ${financialCalc.hamaliRate} ${financialCalc.hamaliUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
+    if (financialCalc.lfinRate && Number(financialCalc.lfinRate) > 0) parts.push(`LF: ${financialCalc.lfinRate} ${financialCalc.lfinUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
+    if (financialCalc.egbRate && Number(financialCalc.egbRate) > 0) parts.push(`EGB: ${financialCalc.egbRate}/bag`);
+    return parts.join('\n');
+  })() : null;
+
+  const rowBg = entry.workflowStatus === 'FAILED' ? '#fde8e8' : entry.workflowStatus === 'COMPLETED' ? '#f0f9ff' : (index % 2 === 0 ? '#f7f8fa' : '#ffffff');
+
+  return (
+    <React.Fragment>
+      <tr style={{ backgroundColor: rowBg, fontWeight: hasMultipleLorries ? 600 : 'normal' }}>
+        <td style={{ ...cellStyle, textAlign: 'center', cursor: hasMultipleLorries ? 'pointer' : 'default', minWidth: '40px' }} onClick={() => hasMultipleLorries && setIsExpanded(!isExpanded)}>
+          {hasMultipleLorries ? (isExpanded ? '▼ ' : '▶ ') : ''}{entryNumber}
+        </td>
+        <td style={{ ...cellStyle, whiteSpace: 'nowrap' }}>{new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
+        <td style={cellStyle}>{entry.entryType}</td>
+        <td style={cellStyle}>{entry.brokerName}</td>
+        <td style={{ ...cellStyle, fontWeight: 700 }}>{entry.variety}</td>
+        <td style={cellStyle}>{entry.partyName}</td>
+        <td style={cellStyle}>{entry.location}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.bags}</td>
+        <td style={{ ...cellStyle, whiteSpace: 'nowrap', fontStyle: hasMultipleLorries ? 'italic' : 'normal' }}>
+          {hasMultipleLorries ? `${inspections.length} trips` : (lorryNumbers || entry.lorryNumber || '-')}
+        </td>
+        <td style={cellStyle}>
+          <span style={{
+            padding: '1px 4px', borderRadius: '3px', fontWeight: 700, fontSize: '7px',
+            backgroundColor: entry.workflowStatus === 'COMPLETED' ? '#d4edda' : entry.workflowStatus === 'FAILED' ? '#f8d7da' : '#cce5ff',
+            color: entry.workflowStatus === 'COMPLETED' ? '#155724' : entry.workflowStatus === 'FAILED' ? '#721c24' : '#004085'
+          }}>
+            {entry.workflowStatus}
+          </span>
+        </td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.moisture || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.cutting1 && entry.qualityParameters?.cutting2 ? `${entry.qualityParameters.cutting1}x${entry.qualityParameters.cutting2}` : (entry.qualityParameters?.cutting1 || '-')}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.bend || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.mixS || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.mixL || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.mix || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.kandu || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.oil || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.sk || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.grainsCount || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.wbR || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.wbBk || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.wbT || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.paddyWb || '-'}</td>
+        <td style={cellStyle}>{entry.qualityParameters?.reportedByUser?.username || '-'}</td>
+        <td style={cellStyle}>{entry.cookingReport?.status || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.lotSelectionDecision || '-'}</td>
+        <td style={cellStyle}>{entry.lotSelectionByUser?.username || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right' }}>₹{entry.offeringPrice || '-'}</td>
+        <td style={cellStyle}>{entry.priceType || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right', color: '#27ae60', fontWeight: 700 }}>₹{entry.finalPrice || '-'}</td>
+        <td style={cellStyle}>{entry.lotAllotment?.supervisor?.username || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700 }}>{totalActualBags || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right' }}>{totalGrossWeight || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right' }}>{totalTareWeight || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700 }}>{totalNetWeight || '-'}</td>
+        <td style={{ ...cellStyle, fontSize: '7px', whiteSpace: 'pre-line' }}>{rateSummary || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right' }}>₹{financialCalc?.baseRateValue || '-'}</td>
+        <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 800, color: '#145a32' }}>₹{totalAmount.toLocaleString()}</td>
+        <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700, color: '#145a32' }}>₹{avgRate.toFixed(2)}</td>
+        <td style={cellStyle}>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            <button onClick={() => window.open(`/final-review?id=${entry.id}`, '_blank')} style={{ fontSize: '7px', cursor: 'pointer', background: '#1e3a5f', color: 'white', border: 'none', padding: '2px 4px' }}>View</button>
+            {isAdminOrManager && <button onClick={() => openEditModal(entry)} style={{ fontSize: '7px', cursor: 'pointer', background: '#e67e22', color: 'white', border: 'none', padding: '2px 4px' }}>Edit</button>}
+          </div>
+        </td>
+      </tr>
+
+      {isExpanded && hasMultipleLorries && inspections.map((trip: any, tIdx: number) => {
+        const inv = trip.inventoryData;
+        const fin = inv?.financialCalculation;
+
+        const tripRateSummary = fin ? (() => {
+          const parts: string[] = [];
+          if (fin.suteRate && Number(fin.suteRate) > 0) parts.push(`S: ${fin.suteRate}`);
+          if (fin.baseRateValue) parts.push(`BR: ₹${Number(fin.baseRateValue).toLocaleString()}`);
+          if (fin.brokerageRate && Number(fin.brokerageRate) > 0) parts.push(`B: ${fin.brokerageRate}`);
+          if (fin.hamaliRate && Number(fin.hamaliRate) > 0) parts.push(`H: ${fin.hamaliRate}`);
+          if (fin.lfinRate && Number(fin.lfinRate) > 0) parts.push(`LF: ${fin.lfinRate}`);
+          return parts.join(', ');
+        })() : null;
+
+        return (
+          <tr key={trip.id} style={{ backgroundColor: '#f0f4f8' }}>
+            <td style={{ ...cellStyle, textAlign: 'center', color: '#64748b' }}>└ Trip {tIdx + 1}</td>
+            <td style={cellStyle}>{new Date(trip.inspectionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={{ ...cellStyle, fontWeight: 700 }}>{trip.lorryNumber}</td>
+            <td style={cellStyle}>-</td>
+            <td style={cellStyle}>-</td>
+            <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700 }}>{trip.cutting1 && trip.cutting2 ? `${trip.cutting1}x${trip.cutting2}` : (trip.cutting1 || '-')}</td>
+            <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700 }}>{trip.bend || '-'}</td>
+            <td colSpan={19} style={{ ...cellStyle, textAlign: 'center', color: '#94a3b8', fontSize: '7px', fontStyle: 'italic' }}>Trip Details: {trip.remarks || 'No remarks'}</td>
+            <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700 }}>{trip.bags}</td>
+            <td style={{ ...cellStyle, textAlign: 'right' }}>{inv?.grossWeight || '-'}</td>
+            <td style={{ ...cellStyle, textAlign: 'right' }}>{inv?.tareWeight || '-'}</td>
+            <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700 }}>{inv?.netWeight || '-'}</td>
+            <td style={{ ...cellStyle, fontSize: '7px' }}>{tripRateSummary || '-'}</td>
+            <td style={{ ...cellStyle, textAlign: 'right' }}>₹{fin?.baseRateValue || '-'}</td>
+            <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700 }}>₹{fin?.totalAmount?.toLocaleString() || '-'}</td>
+            <td style={{ ...cellStyle, textAlign: 'right' }}>₹{fin?.average ? Number(fin.average).toFixed(2) : '-'}</td>
+            <td style={cellStyle}></td>
+          </tr>
+        );
+      })}
+    </React.Fragment>
+  );
+};
+
 const SampleEntryLedger: React.FC = () => {
   const { showNotification } = useNotification();
   const { user } = useAuth();
@@ -463,291 +613,18 @@ const SampleEntryLedger: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              entries.map((entry, index) => {
-                const inspections = entry.lotAllotment?.physicalInspections || [];
-                const totalActualBags = inspections.reduce((sum: number, insp: any) => sum + Number(insp.bags || 0), 0);
-                const lorryNumbers = inspections.map((insp: any) => insp.lorryNumber).filter(Boolean).join(', ');
-                const allInventory = inspections.map((insp: any) => insp.inventoryData).filter(Boolean);
-                const totalGrossWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.grossWeight || 0), 0);
-                const totalTareWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.tareWeight || 0), 0);
-                const totalNetWeight = allInventory.reduce((sum: number, inv: any) => sum + Number(inv.netWeight || 0), 0);
-                const financialCalc = allInventory.find((inv: any) => inv.financialCalculation)?.financialCalculation;
-                const entryNumber = `A${String((page - 1) * pageSize + index + 1).padStart(2, '0')}`;
-
-                // Build rate summary string
-                const rateSummary = financialCalc ? (() => {
-                  const parts: string[] = [];
-                  if (financialCalc.suteRate && Number(financialCalc.suteRate) > 0) {
-                    parts.push(`S: ${financialCalc.suteRate} ${financialCalc.suteType === 'PER_BAG' ? '/bag' : '/ton'}`);
-                  }
-                  if (financialCalc.baseRateValue) {
-                    parts.push(`BR: ₹${Number(financialCalc.baseRateValue).toLocaleString()} ${financialCalc.baseRateUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
-                  }
-                  if (financialCalc.brokerageRate && Number(financialCalc.brokerageRate) > 0) {
-                    parts.push(`B: ${financialCalc.brokerageRate} ${financialCalc.brokerageUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
-                  }
-                  if (financialCalc.hamaliRate && Number(financialCalc.hamaliRate) > 0) {
-                    parts.push(`H: ${financialCalc.hamaliRate} ${financialCalc.hamaliUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
-                  }
-                  if (financialCalc.lfinRate && Number(financialCalc.lfinRate) > 0) {
-                    parts.push(`LF: ${financialCalc.lfinRate} ${financialCalc.lfinUnit === 'PER_BAG' ? '/bag' : '/Q'}`);
-                  }
-                  if (financialCalc.egbRate && Number(financialCalc.egbRate) > 0) {
-                    parts.push(`EGB: ${financialCalc.egbRate}/bag`);
-                  }
-                  return parts.join('\n');
-                })() : null;
-
-                // Build calculation breakdown tooltip
-                const calcBreakdown = financialCalc ? (() => {
-                  const lines: string[] = [];
-                  if (financialCalc.suteNetWeight) {
-                    lines.push(`Sute NW: ${Number(financialCalc.suteNetWeight).toFixed(1)} kg`);
-                  }
-                  if (financialCalc.baseRateTotal) {
-                    lines.push(`Base Rate Amt: ₹${Number(financialCalc.baseRateTotal).toLocaleString()}`);
-                  }
-                  if (financialCalc.brokerageTotal && Number(financialCalc.brokerageTotal) > 0) {
-                    lines.push(`Brokerage: ₹${Number(financialCalc.brokerageTotal).toLocaleString()}`);
-                  }
-                  if (financialCalc.hamaliTotal && Number(financialCalc.hamaliTotal) > 0) {
-                    lines.push(`Hamali: ₹${Number(financialCalc.hamaliTotal).toLocaleString()}`);
-                  }
-                  if (financialCalc.lfinTotal && Number(financialCalc.lfinTotal) > 0) {
-                    lines.push(`LFIN: ₹${Number(financialCalc.lfinTotal).toLocaleString()}`);
-                  }
-                  if (financialCalc.egbTotal && Number(financialCalc.egbTotal) > 0) {
-                    lines.push(`EGB: ₹${Number(financialCalc.egbTotal).toLocaleString()}`);
-                  }
-                  lines.push(`─────────────`);
-                  lines.push(`Total: ₹${Number(financialCalc.totalAmount).toLocaleString()}`);
-                  lines.push(`Avg: ₹${Number(financialCalc.average || 0).toFixed(2)}/Q`);
-                  return lines.join('\n');
-                })() : '';
-
-                const isFailed = entry.workflowStatus === 'FAILED' || entry.lotSelectionDecision === 'FAIL';
-                const isCompleted = entry.workflowStatus === 'COMPLETED';
-                const rowBg = isFailed ? '#fde8e8' : isCompleted ? '#fef9e7' : (index % 2 === 0 ? '#f7f8fa' : '#ffffff');
-                const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '3px 4px', verticalAlign: 'middle', fontSize: '9px', lineHeight: '1.3' };
-
-                return (
-                  <tr key={entry.id} style={{ backgroundColor: rowBg }}>
-                    <td style={{ ...cellStyle, fontWeight: 600, textAlign: 'center', color: '#2c3e50' }}>{entryNumber}</td>
-                    <td style={{ ...cellStyle, whiteSpace: 'nowrap' }}>
-                      {new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </td>
-                    <td style={cellStyle}>{entry.entryType}</td>
-                    <td style={cellStyle}>{entry.brokerName}</td>
-                    <td style={{ ...cellStyle, fontWeight: 500 }}>{entry.variety}</td>
-                    <td style={cellStyle}>{entry.partyName}</td>
-                    <td style={cellStyle}>{entry.location}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 600 }}>{entry.bags}</td>
-                    <td style={{ ...cellStyle, whiteSpace: 'nowrap' }}>
-                      {lorryNumbers || entry.lorryNumber || '-'}
-                    </td>
-                    <td style={cellStyle}>
-                      <span style={{
-                        padding: '1px 4px',
-                        borderRadius: '3px',
-                        backgroundColor:
-                          entry.workflowStatus === 'COMPLETED' ? '#d4edda' :
-                            entry.workflowStatus === 'FAILED' ? '#f8d7da' :
-                              entry.workflowStatus === 'FINAL_REVIEW' ? '#cce5ff' :
-                                '#fff3cd',
-                        color:
-                          entry.workflowStatus === 'COMPLETED' ? '#155724' :
-                            entry.workflowStatus === 'FAILED' ? '#721c24' :
-                              entry.workflowStatus === 'FINAL_REVIEW' ? '#004085' :
-                                '#856404',
-                        fontSize: '7px',
-                        fontWeight: 600
-                      }}>
-                        {entry.workflowStatus}
-                      </span>
-                      {(entry.lotAllotment as any)?.closedAt && (
-                        <div
-                          title={`Closed: ${new Date((entry.lotAllotment as any).closedAt).toLocaleDateString()}\nInspected: ${(entry.lotAllotment as any).inspectedBags || 0} of ${(entry.lotAllotment as any).allottedBags || entry.bags} bags\nReason: ${(entry.lotAllotment as any).closedReason || 'N/A'}`}
-                          style={{
-                            marginTop: '2px',
-                            padding: '1px 4px',
-                            borderRadius: '3px',
-                            backgroundColor: '#fde8e8',
-                            color: '#c0392b',
-                            fontSize: '6.5px',
-                            fontWeight: 700,
-                            cursor: 'help',
-                            textAlign: 'center'
-                          }}
-                        >
-                          🔒 CLOSED ({(entry.lotAllotment as any).inspectedBags || 0}/{(entry.lotAllotment as any).allottedBags || entry.bags})
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.moisture || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 500 }}>
-                      {(() => {
-                        const c1 = entry.qualityParameters?.cutting1;
-                        const c2 = entry.qualityParameters?.cutting2;
-                        const clean = (v: any) => {
-                          if (!v && v !== 0) return '';
-                          const n = Number(v);
-                          return isNaN(n) ? String(v) : (Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, ''));
-                        };
-                        const s1 = clean(c1);
-                        const s2 = clean(c2);
-                        if (s1 && s2) return `${s1} x ${s2}`;
-                        if (s1) return s1;
-                        if (s2) return s2;
-                        return '-';
-                      })()}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.bend || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.mixS || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.mixL || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.mix || (entry.qualityParameters as any)?.mixKandu || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.kandu || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.oil || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.sk || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.grainsCount || (entry.qualityParameters as any)?.skGrainsCount || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.wbR || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.wbBk || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.wbT || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{(entry.qualityParameters as any)?.paddyWb || '-'}</td>
-                    <td style={cellStyle}>{entry.qualityParameters ? ((entry.qualityParameters as any)?.reportedByUser?.username || (entry.qualityParameters as any)?.reportedBy || '-') : '-'}</td>
-                    <td style={cellStyle}>
-                      {entry.cookingReport?.status || (entry.lotSelectionDecision === 'PASS_WITHOUT_COOKING' ? 'Skip' : '-')}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      {entry.lotSelectionDecision === 'PASS_WITHOUT_COOKING' ? (
-                        <span style={{ color: '#27ae60', fontWeight: 600, fontSize: '7px' }}>PASS</span>
-                      ) : entry.lotSelectionDecision === 'PASS_WITH_COOKING' ? (
-                        <span style={{ color: '#e67e22', fontWeight: 600, fontSize: '7px' }}>COOK</span>
-                      ) : entry.lotSelectionDecision === 'FAIL' ? (
-                        <span style={{ color: '#e74c3c', fontWeight: 600, fontSize: '7px' }}>FAIL</span>
-                      ) : '-'}
-                    </td>
-                    <td style={cellStyle}>{entry.lotSelectionByUser?.username || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 500 }}>
-                      {entry.offeringPrice ? `₹${entry.offeringPrice}` : '-'}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.priceType || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 600, color: '#27ae60' }}>
-                      {entry.finalPrice ? `₹${entry.finalPrice}` : '-'}
-                    </td>
-                    <td style={cellStyle}>{entry.lotAllotment?.supervisor?.username || '-'}</td>
-                    <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 500 }}>
-                      {totalActualBags > 0 ? totalActualBags : '-'}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'right' }}>
-                      {allInventory.length > 0 ? Number(totalGrossWeight || 0).toFixed(0) : '-'}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'right' }}>
-                      {allInventory.length > 0 ? Number(totalTareWeight || 0).toFixed(0) : '-'}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 600 }}>
-                      {allInventory.length > 0 ? Number(totalNetWeight || 0).toFixed(0) : '-'}
-                    </td>
-                    {/* Rate Info - what admin entered */}
-                    <td style={{
-                      ...cellStyle,
-                      fontSize: '7px',
-                      whiteSpace: 'pre-line',
-                      lineHeight: '1.2',
-                      backgroundColor: rateSummary ? '#f0f5ff' : undefined,
-                      maxWidth: '90px',
-                      color: '#333'
-                    }}>
-                      {rateSummary || '-'}
-                    </td>
-                    {/* Base Rate */}
-                    <td style={{
-                      ...cellStyle,
-                      textAlign: 'right',
-                      backgroundColor: financialCalc?.baseRateValue ? '#f0f5ff' : undefined
-                    }}>
-                      {financialCalc?.baseRateValue ? (
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '8px', color: '#1a5276' }}>
-                            ₹{Number(financialCalc.baseRateValue).toLocaleString()}
-                          </div>
-                          <div style={{ fontSize: '6.5px', color: '#888' }}>
-                            {financialCalc.baseRateType === 'PD_LOOSE' ? 'PD/L' :
-                              financialCalc.baseRateType === 'MD_LOOSE' ? 'MD/L' :
-                                financialCalc.baseRateType === 'PD_WB' ? 'PD/WB' : 'MD/WB'}
-                            {' · '}
-                            {financialCalc.baseRateUnit === 'PER_BAG' ? '/bag' : '/Q'}
-                          </div>
-                        </div>
-                      ) : '-'}
-                    </td>
-                    {/* Total Amount with hover breakdown */}
-                    <td style={{
-                      ...cellStyle,
-                      textAlign: 'right',
-                      fontWeight: 700,
-                      backgroundColor: financialCalc?.totalAmount ? '#edf7f0' : undefined,
-                      cursor: financialCalc ? 'help' : 'default'
-                    }}
-                      title={calcBreakdown}
-                    >
-                      {financialCalc?.totalAmount ? (
-                        <span style={{ color: '#145a32', fontSize: '8px' }}>
-                          ₹{Number(financialCalc.totalAmount).toLocaleString()}
-                        </span>
-                      ) : '-'}
-                    </td>
-                    {/* Avg Rate */}
-                    <td style={{
-                      ...cellStyle,
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      backgroundColor: financialCalc?.average ? '#edf7f0' : undefined
-                    }}>
-                      {financialCalc?.average ? (
-                        <span style={{ color: '#145a32', fontSize: '8px' }}>
-                          ₹{Number(financialCalc.average || 0).toFixed(2)}
-                        </span>
-                      ) : '-'}
-                    </td>
-                    <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                        <button
-                          onClick={() => window.open(`/final-review?id=${entry.id}`, '_blank')}
-                          style={{
-                            fontSize: '7px',
-                            padding: '2px 6px',
-                            backgroundColor: '#1e3a5f',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '2px',
-                            cursor: 'pointer',
-                            fontWeight: 600
-                          }}
-                        >
-                          View
-                        </button>
-                        {isAdminOrManager && (
-                          <button
-                            onClick={() => openEditModal(entry)}
-                            style={{
-                              fontSize: '7px',
-                              padding: '2px 6px',
-                              backgroundColor: '#e67e22',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '2px',
-                              cursor: 'pointer',
-                              fontWeight: 600
-                            }}
-                          >
-                            Edit
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+              entries.map((entry, index) => (
+                <EntryRow
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  page={page}
+                  pageSize={pageSize}
+                  isAdminOrManager={isAdminOrManager}
+                  openEditModal={openEditModal}
+                  cellStyle={{ border: '1px solid #ddd', padding: '3px 4px', verticalAlign: 'middle', fontSize: '9px', lineHeight: '1.3' }}
+                />
+              ))
             )}
           </tbody>
         </table>
@@ -802,105 +679,109 @@ const SampleEntryLedger: React.FC = () => {
             Next
           </button>
         </div>
-      </div>
+      </div >
 
       {/* Summary */}
-      {entries.length > 0 && (
-        <div style={{
-          marginTop: '20px',
-          padding: '15px',
-          backgroundColor: '#f5f5f5',
-          borderRadius: '5px',
-          fontSize: '12px'
-        }}>
-          <strong>Total Entries: {entries.length}</strong>
-        </div>
-      )}
+      {
+        entries.length > 0 && (
+          <div style={{
+            marginTop: '20px',
+            padding: '15px',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '5px',
+            fontSize: '12px'
+          }}>
+            <strong>Total Entries: {entries.length}</strong>
+          </div>
+        )
+      }
 
       {/* Edit Modal */}
-      {editEntry && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
-          display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
-          paddingTop: '30px', overflowY: 'auto'
-        }}>
+      {
+        editEntry && (
           <div style={{
-            backgroundColor: 'white', borderRadius: '8px', padding: '20px',
-            width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
+            display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+            paddingTop: '30px', overflowY: 'auto'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-              <h3 style={{ margin: 0, color: '#2c3e50' }}>✏️ Admin Edit — {editEntry.partyName} ({editEntry.variety})</h3>
-              <button onClick={() => setEditEntry(null)} style={{ fontSize: '18px', background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
-            </div>
-
-            {/* Section 1: Sample Entry */}
-            <div style={{ marginBottom: '15px' }}>
-              <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#1e3a5f', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>📋 Sample Entry Details</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {[{ l: 'Party Name', f: 'partyName' }, { l: 'Broker', f: 'brokerName' }, { l: 'Variety', f: 'variety' }, { l: 'Location', f: 'location' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Lorry No.', f: 'lorryNumber' }, { l: 'Offering ₹', f: 'offeringPrice', t: 'number' }, { l: 'Final ₹', f: 'finalPrice', t: 'number' }, { l: 'Price Type', f: 'priceType' }].map(({ l, f, t }) => (
-                  <div key={f}>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#666', marginBottom: '2px' }}>{l}</label>
-                    <input type={t || 'text'} value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
-                      style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
-                  </div>
-                ))}
+            <div style={{
+              backgroundColor: 'white', borderRadius: '8px', padding: '20px',
+              width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+                <h3 style={{ margin: 0, color: '#2c3e50' }}>✏️ Admin Edit — {editEntry.partyName} ({editEntry.variety})</h3>
+                <button onClick={() => setEditEntry(null)} style={{ fontSize: '18px', background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
               </div>
-            </div>
 
-            {/* Section 2: Quality Parameters */}
-            {editEntry.qualityParameters && (
+              {/* Section 1: Sample Entry */}
               <div style={{ marginBottom: '15px' }}>
-                <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#8e44ad', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🔬 Quality Parameters</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                  {[{ l: 'Moisture%', f: 'moisture' }, { l: 'Cut 1', f: 'cutting1' }, { l: 'Cut 2', f: 'cutting2' }, { l: 'Bend', f: 'bend' }, { l: 'Mix S', f: 'mixS' }, { l: 'Mix L', f: 'mixL' }, { l: 'Mix', f: 'mix' }, { l: 'Kandu', f: 'kandu' }, { l: 'Oil', f: 'oil' }, { l: 'SK', f: 'sk' }, { l: 'Grains', f: 'grainsCount' }, { l: 'WB R', f: 'wbR' }, { l: 'WB Bk', f: 'wbBk' }, { l: 'WB T', f: 'wbT' }, { l: 'Paddy WB', f: 'paddyWb' }].map(({ l, f }) => (
+                <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#1e3a5f', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>📋 Sample Entry Details</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[{ l: 'Party Name', f: 'partyName' }, { l: 'Broker', f: 'brokerName' }, { l: 'Variety', f: 'variety' }, { l: 'Location', f: 'location' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Lorry No.', f: 'lorryNumber' }, { l: 'Offering ₹', f: 'offeringPrice', t: 'number' }, { l: 'Final ₹', f: 'finalPrice', t: 'number' }, { l: 'Price Type', f: 'priceType' }].map(({ l, f, t }) => (
                     <div key={f}>
-                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
-                      <input type="number" step="0.01" value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
-                        style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#666', marginBottom: '2px' }}>{l}</label>
+                      <input type={t || 'text'} value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
+                        style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
                     </div>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Section 3: Physical Inspections */}
-            {editForm.physicalInspections?.length > 0 && (
-              <div style={{ marginBottom: '15px' }}>
-                <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#27ae60', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🏗️ Physical Inspections ({editForm.physicalInspections.length} trip(s))</h4>
-                {editForm.physicalInspections.map((insp: any, idx: number) => (
-                  <div key={insp.id || idx} style={{ backgroundColor: '#f8faf8', padding: '8px', borderRadius: '4px', marginBottom: '6px', border: '1px solid #e8e8e8' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#555', marginBottom: '4px' }}>Trip {idx + 1}</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                      {[{ l: 'Date', f: 'inspectionDate', t: 'date' }, { l: 'Lorry', f: 'lorryNumber' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Cut 1', f: 'cutting1', t: 'number' }, { l: 'Cut 2', f: 'cutting2', t: 'number' }, { l: 'Bend', f: 'bend', t: 'number' }, { l: 'Remarks', f: 'remarks' }].map(({ l, f, t }) => (
-                        <div key={f}>
-                          <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
-                          <input type={t || 'text'} value={insp[f] || ''} onChange={e => handleInspectionChange(idx, f, e.target.value)}
-                            style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
-                        </div>
-                      ))}
-                    </div>
+              {/* Section 2: Quality Parameters */}
+              {editEntry.qualityParameters && (
+                <div style={{ marginBottom: '15px' }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#8e44ad', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🔬 Quality Parameters</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                    {[{ l: 'Moisture%', f: 'moisture' }, { l: 'Cut 1', f: 'cutting1' }, { l: 'Cut 2', f: 'cutting2' }, { l: 'Bend', f: 'bend' }, { l: 'Mix S', f: 'mixS' }, { l: 'Mix L', f: 'mixL' }, { l: 'Mix', f: 'mix' }, { l: 'Kandu', f: 'kandu' }, { l: 'Oil', f: 'oil' }, { l: 'SK', f: 'sk' }, { l: 'Grains', f: 'grainsCount' }, { l: 'WB R', f: 'wbR' }, { l: 'WB Bk', f: 'wbBk' }, { l: 'WB T', f: 'wbT' }, { l: 'Paddy WB', f: 'paddyWb' }].map(({ l, f }) => (
+                      <div key={f}>
+                        <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
+                        <input type="number" step="0.01" value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
+                          style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '2px solid #eee', paddingTop: '12px' }}>
-              <button onClick={() => setEditEntry(null)} style={{ padding: '8px 20px', fontSize: '13px', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', backgroundColor: '#f5f5f5' }}>
-                Cancel
-              </button>
-              <button onClick={handleSaveEdit} disabled={saving} style={{
-                padding: '8px 25px', fontSize: '13px', border: 'none', borderRadius: '4px', cursor: saving ? 'not-allowed' : 'pointer',
-                backgroundColor: saving ? '#95a5a6' : '#27ae60', color: 'white', fontWeight: 700
-              }}>
-                {saving ? '⏳ Saving...' : '💾 Save All Changes'}
-              </button>
+              {/* Section 3: Physical Inspections */}
+              {editForm.physicalInspections?.length > 0 && (
+                <div style={{ marginBottom: '15px' }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#27ae60', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🏗️ Physical Inspections ({editForm.physicalInspections.length} trip(s))</h4>
+                  {editForm.physicalInspections.map((insp: any, idx: number) => (
+                    <div key={insp.id || idx} style={{ backgroundColor: '#f8faf8', padding: '8px', borderRadius: '4px', marginBottom: '6px', border: '1px solid #e8e8e8' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: '#555', marginBottom: '4px' }}>Trip {idx + 1}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                        {[{ l: 'Date', f: 'inspectionDate', t: 'date' }, { l: 'Lorry', f: 'lorryNumber' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Cut 1', f: 'cutting1', t: 'number' }, { l: 'Cut 2', f: 'cutting2', t: 'number' }, { l: 'Bend', f: 'bend', t: 'number' }, { l: 'Remarks', f: 'remarks' }].map(({ l, f, t }) => (
+                          <div key={f}>
+                            <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
+                            <input type={t || 'text'} value={insp[f] || ''} onChange={e => handleInspectionChange(idx, f, e.target.value)}
+                              style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '2px solid #eee', paddingTop: '12px' }}>
+                <button onClick={() => setEditEntry(null)} style={{ padding: '8px 20px', fontSize: '13px', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', backgroundColor: '#f5f5f5' }}>
+                  Cancel
+                </button>
+                <button onClick={handleSaveEdit} disabled={saving} style={{
+                  padding: '8px 25px', fontSize: '13px', border: 'none', borderRadius: '4px', cursor: saving ? 'not-allowed' : 'pointer',
+                  backgroundColor: saving ? '#95a5a6' : '#27ae60', color: 'white', fontWeight: 700
+                }}>
+                  {saving ? '⏳ Saving...' : '💾 Save All Changes'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
   );
 };

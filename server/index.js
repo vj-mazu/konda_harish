@@ -1307,6 +1307,15 @@ const startServer = async () => {
         console.log('⚠️ Migration 93 warning:', error.message);
       }
 
+      // Migration 94: 10 Lakh Performance — Composite indexes + pg_trgm trigram search
+      try {
+        const add10LakhCompositeIndexes = require('./migrations/94_add_10lakh_composite_indexes');
+        await add10LakhCompositeIndexes.up();
+        console.log('✅ Migration 94: 10 Lakh composite + trigram indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 94 warning:', error.message);
+      }
+
       console.log('✅ Migrations completed.');
     }
 

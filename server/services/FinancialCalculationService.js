@@ -144,10 +144,15 @@ class FinancialCalculationService {
         calculationType: 'MANAGER'
       };
 
+      console.log('Manager financial saving for inventoryDataId:', calculationData.inventoryDataId);
+      console.log('Final data to update/patch:', finalData);
+
       const calculation = await FinancialCalculationRepository.updateByInventoryDataId(
         calculationData.inventoryDataId,
         finalData
       );
+
+      console.log('Update result ID:', calculation?.id);
 
       await AuditService.logCreate(userId, 'financial_calculations', calculation.id, calculation);
 
@@ -158,6 +163,8 @@ class FinancialCalculationService {
 
       // Transition based on current status:
       // - OWNER_FINANCIAL -> MANAGER_FINANCIAL -> FINAL_REVIEW
+
+      // 1. Move to MANAGER_FINANCIAL if coming from OWNER_FINANCIAL
       if (currentStatus === 'OWNER_FINANCIAL') {
         try {
           await WorkflowEngine.transitionTo(
@@ -169,12 +176,33 @@ class FinancialCalculationService {
           );
           console.log('Transitioned to MANAGER_FINANCIAL');
         } catch (err) {
-          console.log('Workflow transition error:', err.message);
+          console.log('Workflow transition error during MANAGER_FINANCIAL step:', err.message);
         }
       }
 
-      if (currentStatus === 'OWNER_FINANCIAL' || currentStatus === 'MANAGER_FINANCIAL') {
-        try {
+      // 2. Check if we can move to FINAL_REVIEW
+      // We only move to FINAL_REVIEW if ALL inventory items for this sample entry have manager financial calculations
+      try {
+        const SampleEntryRepository = require('../repositories/SampleEntryRepository');
+        const entry = await SampleEntryRepository.findById(calculationData.sampleEntryId, {
+          includeAllotment: true,
+          includeInspection: true,
+          includeInventory: true,
+          includeFinancial: true
+        });
+
+        const inspections = entry?.lotAllotment?.physicalInspections || [];
+        const inventoryItems = inspections.map(i => i.inventoryData).filter(Boolean);
+
+        // Count how many have manager financials (manager_calculated_by is not null)
+        const itemsWithManagerFin = inventoryItems.filter(inv =>
+          inv.financialCalculation && inv.financialCalculation.managerCalculatedBy !== null
+        ).length;
+
+        console.log(`Financial Progress: ${itemsWithManagerFin}/${inventoryItems.length} lorries completed`);
+
+        if (inventoryItems.length > 0 && itemsWithManagerFin === inventoryItems.length) {
+          console.log('All lorries complete! Moving to FINAL_REVIEW...');
           await WorkflowEngine.transitionTo(
             calculationData.sampleEntryId,
             'FINAL_REVIEW',
@@ -182,10 +210,11 @@ class FinancialCalculationService {
             userRole,
             { managerFinancialCalculationId: calculation.id }
           );
-          console.log('Transitioned to FINAL_REVIEW');
-        } catch (err) {
-          console.log('Workflow transition error:', err.message);
+        } else {
+          console.log(`Staying in MANAGER_FINANCIAL - ${inventoryItems.length - itemsWithManagerFin} lorries pending`);
         }
+      } catch (err) {
+        console.log('Workflow transition error during FINAL_REVIEW check:', err.message);
       }
 
       console.log('Manager financial saved, current status was:', currentStatus);

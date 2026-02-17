@@ -155,17 +155,29 @@ router.get('/arrivals', auth, async (req, res) => {
       return acc;
     }, {});
 
-    // FIXED: Improved available months query with proper filtering
+    // FIXED: Parameterized query to prevent SQL injection (was using string interpolation)
+    const monthConditions = [];
+    const monthReplacements = {};
+    if (movementType) {
+      monthConditions.push('"movementType" = :movementType');
+      monthReplacements.movementType = movementType;
+    }
+    if (status) {
+      monthConditions.push('status = :status');
+      monthReplacements.status = status;
+    }
+    const monthWhereClause = monthConditions.length > 0
+      ? 'WHERE ' + monthConditions.join(' AND ')
+      : '';
+
     const monthsQuery = await sequelize.query(`
       SELECT DISTINCT 
         TO_CHAR(date, 'YYYY-MM') as month,
         TO_CHAR(date, 'Month YYYY') as month_label
       FROM arrivals
-      WHERE 1=1
-        ${movementType ? `AND "movementType" = '${movementType}'` : ''}
-        ${status ? `AND status = '${status}'` : ''}
+      ${monthWhereClause}
       ORDER BY month DESC
-    `);
+    `, { replacements: monthReplacements });
 
     const availableMonths = monthsQuery[0];
 

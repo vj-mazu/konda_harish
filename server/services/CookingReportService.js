@@ -25,11 +25,19 @@ class CookingReportService {
 
       reportData.reviewedByUserId = userId;
 
-      // Create cooking report
-      const report = await CookingReportRepository.create(reportData);
+      // Check if report already exists (Upsert logic)
+      const existing = await CookingReportRepository.findBySampleEntryId(reportData.sampleEntryId);
 
-      // Log audit trail
-      await AuditService.logCreate(userId, 'cooking_reports', report.id, report);
+      let report;
+      if (existing) {
+        console.log(`[COOKING] Updating existing cooking report for sample entry: ${reportData.sampleEntryId}`);
+        report = await CookingReportRepository.update(existing.id, reportData);
+        await AuditService.logUpdate(userId, 'cooking_reports', report.id, existing, report);
+      } else {
+        console.log(`[COOKING] Creating new cooking report for sample entry: ${reportData.sampleEntryId}`);
+        report = await CookingReportRepository.create(reportData);
+        await AuditService.logCreate(userId, 'cooking_reports', report.id, report);
+      }
 
       // Transition workflow based on status
       let nextStatus;
