@@ -3,10 +3,13 @@
  * 
  * Manages workflow state transitions for the Sample Entry to Purchase workflow.
  * Validates transitions based on user roles and required data.
+ * 
+ * FIXED: Allow going back from FINAL_REVIEW to OWNER_FINANCIAL when new inventory (new lorry) is added
  */
 
 const SampleEntry = require('../models/SampleEntry');
 const SampleEntryAuditLog = require('../models/SampleEntryAuditLog');
+const InventoryData = require('../models/InventoryData');
 
 // Define all valid workflow transitions
 const WORKFLOW_TRANSITIONS = [
@@ -22,7 +25,6 @@ const WORKFLOW_TRANSITIONS = [
     allowedRoles: ['admin', 'manager'],
     requiredData: []
   },
-  // Allow direct transitions from QUALITY_CHECK for admin convenience
   {
     fromStatus: 'QUALITY_CHECK',
     toStatus: 'COOKING_REPORT',
@@ -61,7 +63,7 @@ const WORKFLOW_TRANSITIONS = [
   },
   {
     fromStatus: 'COOKING_REPORT',
-    toStatus: 'FINAL_REPORT',
+    toStatus: 'FINAL_REVIEW',
     allowedRoles: ['admin', 'manager'],
     requiredData: ['cookingReport']
   },
@@ -86,13 +88,21 @@ const WORKFLOW_TRANSITIONS = [
   {
     fromStatus: 'PHYSICAL_INSPECTION',
     toStatus: 'INVENTORY_ENTRY',
-    allowedRoles: ['inventory_staff', 'admin'],
+    allowedRoles: ['inventory_staff', 'admin', 'manager'],
     requiredData: ['physicalInspection']
   },
+  // Manager can close a lot early (party didn't send all bags)
+  {
+    fromStatus: 'LOT_ALLOTMENT',
+    toStatus: 'INVENTORY_ENTRY',
+    allowedRoles: ['manager', 'admin'],
+    requiredData: []
+  },
+  // First time: INVENTORY_ENTRY -> OWNER_FINANCIAL
   {
     fromStatus: 'INVENTORY_ENTRY',
     toStatus: 'OWNER_FINANCIAL',
-    allowedRoles: ['admin', 'manager'],
+    allowedRoles: ['admin', 'manager', 'owner'],
     requiredData: ['inventoryData']
   },
   {
@@ -102,16 +112,29 @@ const WORKFLOW_TRANSITIONS = [
     requiredData: ['ownerFinancialCalculations']
   },
   {
-    fromStatus: 'OWNER_FINANCIAL',
-    toStatus: 'FINAL_REVIEW',
-    allowedRoles: ['manager', 'admin'],
-    requiredData: ['ownerFinancialCalculations']
-  },
-  {
     fromStatus: 'MANAGER_FINANCIAL',
     toStatus: 'FINAL_REVIEW',
     allowedRoles: ['admin', 'manager'],
     requiredData: ['managerFinancialCalculations']
+  },
+  // KEY FIX: Allow going back when new inventory (new lorry) is added at any stage
+  {
+    fromStatus: 'OWNER_FINANCIAL',
+    toStatus: 'OWNER_FINANCIAL',
+    allowedRoles: ['admin', 'manager', 'owner', 'inventory_staff'],
+    requiredData: []
+  },
+  {
+    fromStatus: 'MANAGER_FINANCIAL',
+    toStatus: 'OWNER_FINANCIAL',
+    allowedRoles: ['admin', 'manager', 'owner', 'inventory_staff'],
+    requiredData: []
+  },
+  {
+    fromStatus: 'FINAL_REVIEW',
+    toStatus: 'OWNER_FINANCIAL',
+    allowedRoles: ['admin', 'manager', 'owner', 'inventory_staff'],
+    requiredData: []
   },
   {
     fromStatus: 'FINAL_REVIEW',
@@ -136,25 +159,19 @@ class WorkflowEngine {
 
       const fromStatus = sampleEntry.workflowStatus;
 
+      console.log(`Workflow transition: ${fromStatus} -> ${toStatus}, role: ${userRole}`);
+
       // Check if transition is allowed
       if (!this.canTransition(fromStatus, toStatus, userRole)) {
         throw new Error(`Transition from ${fromStatus} to ${toStatus} not allowed for role ${userRole}`);
-      }
-
-      // Validate required data
-      const transition = WORKFLOW_TRANSITIONS.find(
-        t => t.fromStatus === fromStatus && t.toStatus === toStatus
-      );
-
-      if (transition && transition.requiredData.length > 0) {
-        // This would be validated by the service layer before calling transitionTo
-        // For now, we trust that the service has validated the data
       }
 
       // Update workflow status
       const oldStatus = sampleEntry.workflowStatus;
       sampleEntry.workflowStatus = toStatus;
       await sampleEntry.save();
+
+      console.log(`Workflow transitioned successfully: ${oldStatus} -> ${toStatus}`);
 
       // Log the transition in audit trail
       await SampleEntryAuditLog.create({
@@ -208,54 +225,6 @@ class WorkflowEngine {
    */
   getAllTransitions() {
     return WORKFLOW_TRANSITIONS;
-  }
-
-  /**
-   * Validate if required data exists for a transition
-   */
-  async validateRequiredData(sampleEntryId, requiredData) {
-    const sampleEntry = await SampleEntry.findByPk(sampleEntryId, {
-      include: [
-        { association: 'qualityParameters' },
-        { association: 'cookingReport' },
-        { association: 'lotAllotment' }
-      ]
-    });
-
-    if (!sampleEntry) {
-      return { valid: false, missing: ['sampleEntry'] };
-    }
-
-    const missing = [];
-
-    for (const dataKey of requiredData) {
-      switch (dataKey) {
-        case 'qualityParameters':
-          if (!sampleEntry.qualityParameters) missing.push(dataKey);
-          break;
-        case 'cookingReport':
-          if (!sampleEntry.cookingReport) missing.push(dataKey);
-          break;
-        case 'lotAllotment':
-          if (!sampleEntry.lotAllotment) missing.push(dataKey);
-          break;
-        case 'offeringPrice':
-          // This would be stored in a separate field or table
-          // For now, we assume it's validated by the service
-          break;
-        case 'physicalInspection':
-        case 'inventoryData':
-        case 'ownerFinancialCalculations':
-        case 'managerFinancialCalculations':
-          // These would be validated by checking related tables
-          break;
-      }
-    }
-
-    return {
-      valid: missing.length === 0,
-      missing
-    };
   }
 }
 

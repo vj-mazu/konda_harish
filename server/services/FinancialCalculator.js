@@ -44,7 +44,8 @@ class FinancialCalculator {
    * 
    * PD/Loose + Per Bag: (Sute Net Weight ÷ 75) × Base Rate
    * PD/Loose + Per Quintal: (Sute Net Weight ÷ 100) × Base Rate
-   * MD/Loose: (Sute Net Weight ÷ Custom Divisor) × Base Rate
+   * MD/Loose + Per Bag: (Sute Net Weight ÷ 75) × Base Rate
+   * MD/Loose + Per Quintal: (Sute Net Weight ÷ Custom Divisor) × Base Rate
    * PD/WB, MD/WB: Same as PD/Loose
    */
   calculateBaseRate(type, unit, rate, suteNetWeight, customDivisor = null) {
@@ -53,13 +54,19 @@ class FinancialCalculator {
     let storedCustomDivisor = null;
 
     // Determine divisor based on type and unit
-    if (type === 'MD_LOOSE' && customDivisor) {
-      divisor = customDivisor;
-      storedCustomDivisor = customDivisor; // Store for propagation
-    } else if (unit === 'PER_BAG') {
+    // PER_BAG always uses 75, regardless of type
+    if (unit === 'PER_BAG') {
       divisor = 75;
+      // Custom divisor only stored for PER_QUINTAL with MD_LOOSE
     } else if (unit === 'PER_QUINTAL') {
-      divisor = 100;
+      // MD_LOOSE with custom divisor uses custom divisor
+      if (type === 'MD_LOOSE' && customDivisor) {
+        divisor = customDivisor;
+        storedCustomDivisor = customDivisor;
+      } else {
+        // PD_LOOSE or others use 100
+        divisor = 100;
+      }
     } else {
       throw new Error(`Invalid base rate configuration: type=${type}, unit=${unit}`);
     }
@@ -73,19 +80,33 @@ class FinancialCalculator {
   }
 
   /**
+   * Get divisor for PER_QUINTAL calculations
+   * Uses custom divisor if MD_LOOSE type, otherwise uses 100
+   */
+  getPerQuintalDivisor(type, customDivisor = null) {
+    // If MD_LOOSE type with custom divisor, use it for all
+    if (type === 'MD_LOOSE' && customDivisor) {
+      return customDivisor;
+    }
+    // Otherwise use default 100
+    return 100;
+  }
+
+  /**
    * Calculate Brokerage
    * 
    * Per Bag: Brokerage Rate × Number of Bags
    * Per Quintal: (Actual Net Weight ÷ Divisor) × Brokerage Rate
-   * Divisor = Custom Divisor (if MD/Loose) or 100
+   * MD_LOOSE: Uses custom divisor, otherwise uses 100
    */
-  calculateBrokerage(rate, unit, actualNetWeight, bags, customDivisor = null) {
+  calculateBrokerage(rate, unit, actualNetWeight, bags, baseRateType = null, customDivisor = null) {
     let total;
 
     if (unit === 'PER_BAG') {
       total = rate * bags;
     } else if (unit === 'PER_QUINTAL') {
-      const divisor = customDivisor || 100;
+      // Use custom divisor if MD_LOOSE, otherwise use 100
+      const divisor = this.getPerQuintalDivisor(baseRateType, customDivisor);
       total = (actualNetWeight / divisor) * rate;
     } else {
       throw new Error(`Invalid brokerage unit: ${unit}`);
@@ -115,15 +136,16 @@ class FinancialCalculator {
    * 
    * Per Bag: LFIN Rate × Number of Bags
    * Per Quintal: (Actual Net Weight ÷ Divisor) × LFIN Rate
-   * Divisor = Custom Divisor (if MD/Loose) or 100
+   * MD_LOOSE: Uses custom divisor, otherwise uses 100
    */
-  calculateLFIN(rate, unit, actualNetWeight, bags, customDivisor = null) {
+  calculateLFIN(rate, unit, actualNetWeight, bags, baseRateType = null, customDivisor = null) {
     let total;
 
     if (unit === 'PER_BAG') {
       total = rate * bags;
     } else if (unit === 'PER_QUINTAL') {
-      const divisor = 100;
+      // Use custom divisor if MD_LOOSE, otherwise use 100
+      const divisor = this.getPerQuintalDivisor(baseRateType, customDivisor);
       total = (actualNetWeight / divisor) * rate;
     } else {
       throw new Error(`Invalid LFIN unit: ${unit}`);
@@ -137,15 +159,16 @@ class FinancialCalculator {
    * 
    * Per Bag: Hamali Rate × Number of Bags
    * Per Quintal: (Actual Net Weight ÷ Divisor) × Hamali Rate
-   * Divisor = Custom Divisor (if MD/Loose) or 100
+   * MD_LOOSE: Uses custom divisor, otherwise uses 100
    */
-  calculateHamali(rate, unit, actualNetWeight, bags, customDivisor = null) {
+  calculateHamali(rate, unit, actualNetWeight, bags, baseRateType = null, customDivisor = null) {
     let total;
 
     if (unit === 'PER_BAG') {
       total = rate * bags;
     } else if (unit === 'PER_QUINTAL') {
-      const divisor = 100;
+      // Use custom divisor if MD_LOOSE, otherwise use 100
+      const divisor = this.getPerQuintalDivisor(baseRateType, customDivisor);
       total = (actualNetWeight / divisor) * rate;
     } else {
       throw new Error(`Invalid Hamali unit: ${unit}`);
@@ -245,33 +268,36 @@ class FinancialCalculator {
     // Get custom divisor for propagation
     const propagatedDivisor = baseRateResult.customDivisor;
 
-    // Step 3: Calculate Brokerage
+    // Step 3: Calculate Brokerage (pass baseRateType for custom divisor)
     const brokerageTotal = this.calculateBrokerage(
       brokerageRate,
       brokerageUnit,
       actualNetWeight,
       bags,
+      baseRateType,
       propagatedDivisor
     );
 
     // Step 4: Calculate EGB (may be null)
     const egbTotal = egbRate ? this.calculateEGB(egbRate, bags, baseRateType) : null;
 
-    // Step 5: Calculate LFIN
+    // Step 5: Calculate LFIN (pass baseRateType for custom divisor)
     const lfinTotal = this.calculateLFIN(
       lfinRate,
       lfinUnit,
       actualNetWeight,
       bags,
+      baseRateType,
       propagatedDivisor
     );
 
-    // Step 6: Calculate Hamali
+    // Step 6: Calculate Hamali (pass baseRateType for custom divisor)
     const hamaliTotal = this.calculateHamali(
       hamaliRate,
       hamaliUnit,
       actualNetWeight,
       bags,
+      baseRateType,
       propagatedDivisor
     );
 

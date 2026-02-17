@@ -177,13 +177,23 @@ const FinalReviewPage: React.FC = () => {
     };
 
     const findFinancialCalculation = (entry: any) => {
+        // Aggregate totals from ALL financial calculations across all inspections
         const inspections = entry?.lotAllotment?.physicalInspections || [];
-        for (const insp of inspections) {
-            if (insp?.inventoryData?.financialCalculation) {
-                return insp.inventoryData.financialCalculation;
-            }
-        }
-        return null;
+        const allFCs = inspections
+            .filter((i: any) => i?.inventoryData?.financialCalculation)
+            .map((i: any) => i.inventoryData.financialCalculation);
+
+        if (allFCs.length === 0) return null;
+        if (allFCs.length === 1) return allFCs[0];
+
+        // Aggregate for multi-entry lots
+        const totalAmount = allFCs.reduce((sum: number, fc: any) => sum + Number(fc.totalAmount || 0), 0);
+        const totalNetWeight = inspections
+            .filter((i: any) => i?.inventoryData)
+            .reduce((sum: number, i: any) => sum + Number(i.inventoryData.netWeight || 0), 0);
+        const average = totalNetWeight > 0 ? (totalAmount / totalNetWeight * 100) : 0;
+
+        return { ...allFCs[0], totalAmount, average };
     };
 
     const handleComplete = async () => {
@@ -215,16 +225,18 @@ const FinalReviewPage: React.FC = () => {
                                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px' }}>Party / Variety</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px' }}>Broker</th>
                                     <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px' }}>Bags</th>
+                                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px' }}>Lorries</th>
                                     <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px' }}>Avg Rate</th>
-                                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '13px' }}>Final Amount</th>
+                                    <th style={{ padding: '12px', textAlign: 'right', fontSize: '13px' }}>Total Amount</th>
                                     <th style={{ padding: '12px', textAlign: 'right', fontSize: '13px' }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: '3rem' }}>Loading...</td></tr> :
-                                    entries.length === 0 ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No entries pending review</td></tr> :
+                                {loading ? <tr><td colSpan={8} style={{ textAlign: 'center', padding: '3rem' }}>Loading...</td></tr> :
+                                    entries.length === 0 ? <tr><td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No entries pending review</td></tr> :
                                         entries.map(e => {
                                             const fc = findFinancialCalculation(e);
+                                            const lorryCount = (e?.lotAllotment?.physicalInspections || []).filter((i: any) => i?.inventoryData).length;
                                             return (
                                                 <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                     <Td style={{ textAlign: 'left' }}>{new Date(e.entryDate).toLocaleDateString()}</Td>
@@ -234,6 +246,11 @@ const FinalReviewPage: React.FC = () => {
                                                     </Td>
                                                     <td style={{ padding: '12px', textAlign: 'left', fontSize: '13px', borderBottom: '1px solid #f1f5f9' }}>{e.brokerName}</td>
                                                     <td style={{ padding: '12px', textAlign: 'center', fontSize: '13px', borderBottom: '1px solid #f1f5f9' }}>{e.bags}</td>
+                                                    <td style={{ padding: '12px', textAlign: 'center', fontSize: '13px', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <span style={{ background: lorryCount > 1 ? '#dbeafe' : '#f1f5f9', color: lorryCount > 1 ? '#1e40af' : '#64748b', padding: '2px 8px', borderRadius: '10px', fontWeight: 600, fontSize: '11px' }}>
+                                                            {lorryCount} lorr{lorryCount === 1 ? 'y' : 'ies'}
+                                                        </span>
+                                                    </td>
                                                     <Td>₹{Number(fc?.average || 0).toFixed(2)}</Td>
                                                     <Td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                                                         ₹{Number(fc?.totalAmount || 0).toLocaleString()}
@@ -270,9 +287,27 @@ const FinalReviewPage: React.FC = () => {
     const inspections = allot?.physicalInspections || [];
     // Get aggregated data for preview in inspection section
     const totalActualBags = inspections.reduce((sum: number, i: any) => sum + (i.bags || 0), 0);
-    const insp = inspections.find((i: any) => i.inventoryData?.financialCalculation) || inspections[0];
-    const inv = insp?.inventoryData;
-    const fc = findFinancialCalculation(selectedEntry);
+
+    // Collect ALL inventory data and financial calculations across all inspections
+    const allInventoryAndFinancials = inspections
+        .filter((i: any) => i.inventoryData)
+        .map((i: any, idx: number) => ({
+            tripIndex: idx + 1,
+            inspection: i,
+            inventory: i.inventoryData,
+            financial: i.inventoryData?.financialCalculation || null
+        }));
+
+    // Calculate grand totals from all financial calculations
+    const grandTotalAmount = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.totalAmount || 0), 0);
+    const grandTotalSute = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.totalSute || 0), 0);
+    const grandTotalBrokerage = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.brokerageTotal || 0), 0);
+    const grandTotalEgb = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.egbTotal || 0), 0);
+    const grandTotalLfin = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.lfinTotal || 0), 0);
+    const grandTotalHamali = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.financial?.hamaliTotal || 0), 0);
+    const grandTotalNetWeight = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.inventory?.netWeight || 0), 0);
+    const grandTotalBags = allInventoryAndFinancials.reduce((sum: number, item: any) => sum + Number(item.inventory?.bags || 0), 0);
+    const grandAvgRate = grandTotalNetWeight > 0 ? (grandTotalAmount / grandTotalNetWeight * 100) : 0;
 
     return (
         <Container>
@@ -380,48 +415,245 @@ const FinalReviewPage: React.FC = () => {
                         <SectionTitle><RoleBadge role="Physical" /> 3. Physical Inspection</SectionTitle>
                         <ReviewTable>
                             <tbody>
-                                <tr><th>Supervisor</th><td>{insp?.reportedBy?.username || allot?.supervisor?.username || 'N/A'}</td></tr>
-                                <tr><th>Actual Bags</th><td>{totalActualBags > 0 ? `${totalActualBags} Bags` : 'N/A'}</td></tr>
+                                <tr><th>Supervisor</th><td>{inspections[0]?.reportedBy?.username || allot?.supervisor?.username || 'N/A'}</td></tr>
+                                <tr><th>Allotted Bags</th><td style={{ fontWeight: 600, color: '#2563eb' }}>{allot?.allottedBags || selectedEntry.bags} Bags</td></tr>
+                                <tr><th>Inspected Bags</th><td style={{ fontWeight: 600, color: '#16a34a' }}>{totalActualBags > 0 ? `${totalActualBags} Bags` : '0 Bags'}</td></tr>
+                                <tr><th>Remaining</th><td style={{ fontWeight: 600, color: (allot?.allottedBags || selectedEntry.bags) - totalActualBags === 0 ? '#16a34a' : '#ea580c' }}>
+                                    {(allot?.allottedBags || selectedEntry.bags) - totalActualBags} Bags
+                                </td></tr>
+                                <tr><th>Progress</th><td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1, height: '16px', backgroundColor: '#e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                                            <div style={{
+                                                height: '100%',
+                                                width: `${Math.min(100, (totalActualBags / (allot?.allottedBags || selectedEntry.bags || 1)) * 100)}%`,
+                                                backgroundColor: totalActualBags >= (allot?.allottedBags || selectedEntry.bags) ? '#16a34a' : '#f59e0b',
+                                                borderRadius: '8px',
+                                                transition: 'width 0.3s ease'
+                                            }} />
+                                        </div>
+                                        <span style={{ fontSize: '12px', fontWeight: 700, minWidth: '40px' }}>
+                                            {((totalActualBags / (allot?.allottedBags || selectedEntry.bags || 1)) * 100).toFixed(0)}%
+                                        </span>
+                                    </div>
+                                </td></tr>
+                                <tr><th>Inspection Trips</th><td>{inspections.length} Trip(s)</td></tr>
                                 <tr><th>Lorry Number(s)</th><td>{inspections.map((i: any) => i.lorryNumber).filter(Boolean).join(', ') || 'N/A'}</td></tr>
-                                <tr><th>WB Number</th><td>{inv?.wbNumber || 'N/A'}</td></tr>
-                                <tr><th>Gross / Tare Wt</th><td>{inv ? `${inv.grossWeight || 0} / ${inv.tareWeight || 0} Kg` : 'N/A'}</td></tr>
-                                <tr><th>Final Net Weight</th><td><strong>{inv?.netWeight ? `${inv.netWeight} Kg` : 'N/A'}</strong></td></tr>
                             </tbody>
                         </ReviewTable>
 
-                        <SectionTitle><RoleBadge role="Financial" /> 4. Financial Calculations</SectionTitle>
-                        <ReviewTable>
-                            <tbody>
-                                <tr><th>Owner Prep</th><td>{fc?.owner?.username || 'N/A'}</td></tr>
-                                <tr><th>Manager Review</th><td>{fc?.manager?.username || 'N/A'}</td></tr>
-                                <tr><th>Base Rate</th><td>
-                                    {fc ? (
-                                        <>
-                                            <div style={{ fontWeight: 600 }}>₹{Number(fc.baseRateValue || 0).toLocaleString()}</div>
-                                            <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                                {fc.baseRateType === 'PD_LOOSE' ? 'PD Loose' : fc.baseRateType === 'PD_WB' ? 'PD WB' : fc.baseRateType === 'MD_LOOSE' ? 'MD Loose' : fc.baseRateType === 'MD_WB' ? 'MD WB' : fc.baseRateType || 'N/A'}
-                                                {fc.customDivisor ? ` (Divisor: ${fc.customDivisor})` : ''}
-                                            </div>
-                                        </>
-                                    ) : 'N/A'}
-                                </td></tr>
-                                <tr><th>Sute Details</th><td>{fc ? `₹${Number(fc.totalSute || 0).toLocaleString()} (${fc.suteRate || 0} ${fc.suteType === 'PER_BAG' ? 'per bag' : fc.suteType === 'PER_TON' ? 'per ton' : fc.suteType || ''})` : 'N/A'}</td></tr>
-                                <tr><th>Charges (LF/Ham)</th><td>{fc ? `LF: ₹${Number(fc.lfinTotal || 0).toLocaleString()} / Ham: ₹${Number(fc.hamaliTotal || 0).toLocaleString()}` : 'N/A'}</td></tr>
-                                <tr><th>Add-ons (Brk/EGB)</th><td>{fc ? `Brk: ₹${Number(fc.brokerageTotal || 0).toLocaleString()} / EGB: ₹${Number(fc.egbTotal || 0).toLocaleString()}` : 'N/A'}</td></tr>
-                            </tbody>
-                        </ReviewTable>
+                        {/* Individual inspection trip breakdown */}
+                        {inspections.length > 0 && (
+                            <div style={{ marginTop: '10px', marginBottom: '15px' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>
+                                    📋 Inspection Trip Details
+                                </div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f0fdf4' }}>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px', textAlign: 'center' }}>#</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px' }}>Date</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px' }}>Lorry</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px', textAlign: 'right' }}>Bags</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px', textAlign: 'right' }}>Cutting</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px', textAlign: 'right' }}>Bend</th>
+                                            <th style={{ border: '1px solid #e2e8f0', padding: '6px' }}>By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {inspections.map((trip: any, idx: number) => (
+                                            <tr key={trip.id} style={{ background: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px', textAlign: 'center' }}>{idx + 1}</td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px' }}>
+                                                    {trip.inspectionDate ? new Date(trip.inspectionDate).toLocaleDateString() : '-'}
+                                                </td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px' }}>{trip.lorryNumber || '-'}</td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px', textAlign: 'right', fontWeight: 600 }}>{trip.bags}</td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px', textAlign: 'right' }}>
+                                                    {trip.cutting1} x {trip.cutting2 ?? '-'}
+                                                </td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px', textAlign: 'right' }}>{trip.bend}</td>
+                                                <td style={{ border: '1px solid #e2e8f0', padding: '5px' }}>{trip.reportedBy?.username || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
 
+                {/* ==================== INVENTORY & FINANCIAL DETAILS PER LORRY ==================== */}
+                <div style={{ marginTop: '1.5rem' }}>
+                    <SectionTitle>
+                        <span><RoleBadge role="Financial" /> 4. Inventory & Financial Calculations ({allInventoryAndFinancials.length} Entr{allInventoryAndFinancials.length === 1 ? 'y' : 'ies'})</span>
+                    </SectionTitle>
+
+                    {allInventoryAndFinancials.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
+                            No inventory data recorded yet
+                        </div>
+                    ) : (
+                        <>
+                            {/* Per-lorry details */}
+                            {allInventoryAndFinancials.map((item: any, idx: number) => (
+                                <div key={item.inspection.id} style={{
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '12px',
+                                    padding: '1rem 1.5rem',
+                                    marginBottom: '1rem',
+                                    background: idx % 2 === 0 ? '#ffffff' : '#f8fafc'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ background: '#2563eb', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
+                                                Lorry #{idx + 1}
+                                            </span>
+                                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px' }}>
+                                                🚛 {item.inspection.lorryNumber || 'N/A'}
+                                            </span>
+                                        </div>
+                                        <span style={{
+                                            padding: '2px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 700,
+                                            background: item.financial ? '#dcfce7' : '#fef3c7',
+                                            color: item.financial ? '#166534' : '#92400e'
+                                        }}>
+                                            {item.financial ? '✅ Financial Done' : '⏳ Financial Pending'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        {/* Inventory Details */}
+                                        <div>
+                                            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>📦 Inventory Data</div>
+                                            <ReviewTable>
+                                                <tbody>
+                                                    <tr><th>Bags</th><td style={{ fontWeight: 600 }}>{item.inventory.bags || '-'}</td></tr>
+                                                    <tr><th>WB Number</th><td>{item.inventory.wbNumber || 'N/A'}</td></tr>
+                                                    <tr><th>Gross Weight</th><td>{item.inventory.grossWeight || 0} Kg</td></tr>
+                                                    <tr><th>Tare Weight</th><td>{item.inventory.tareWeight || 0} Kg</td></tr>
+                                                    <tr><th>Net Weight</th><td style={{ fontWeight: 700, color: '#0f172a' }}>{item.inventory.netWeight || 0} Kg</td></tr>
+                                                    <tr><th>Location</th><td>
+                                                        {item.inventory.location === 'DIRECT_KUNCHINITTU' ? (
+                                                            <span style={{ color: '#2563eb', fontWeight: 600 }}>📦 Direct Kunchinittu</span>
+                                                        ) : item.inventory.location === 'DIRECT_OUTTURN_PRODUCTION' ? (
+                                                            <span style={{ color: '#7c3aed', fontWeight: 600 }}>🏭 Direct Outturn</span>
+                                                        ) : item.inventory.location === 'WAREHOUSE' ? (
+                                                            <span style={{ color: '#059669', fontWeight: 600 }}>🏬 Warehouse</span>
+                                                        ) : 'N/A'}
+                                                    </td></tr>
+                                                    {item.inventory.kunchinittu && (
+                                                        <tr><th>Kunchinittu</th><td style={{ fontWeight: 600, color: '#2563eb' }}>
+                                                            {item.inventory.kunchinittu.name} {item.inventory.kunchinittu.variety ? `(${item.inventory.kunchinittu.variety.name})` : ''}
+                                                        </td></tr>
+                                                    )}
+                                                    {item.inventory.outturn && (
+                                                        <tr><th>Outturn</th><td style={{ fontWeight: 600, color: '#7c3aed' }}>
+                                                            {item.inventory.outturn.outturnNumber || item.inventory.outturn.code || `OUT-${item.inventory.outturn.id}`} {item.inventory.outturn.allottedVariety ? `(${item.inventory.outturn.allottedVariety})` : ''}
+                                                        </td></tr>
+                                                    )}
+                                                </tbody>
+                                            </ReviewTable>
+                                        </div>
+
+                                        {/* Financial Calculation Details */}
+                                        <div>
+                                            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>💰 Financial Calculation</div>
+                                            {item.financial ? (
+                                                <ReviewTable>
+                                                    <tbody>
+                                                        <tr><th>Owner Prep</th><td>{item.financial.owner?.username || 'N/A'}</td></tr>
+                                                        <tr><th>Manager Review</th><td>{item.financial.manager?.username || 'N/A'}</td></tr>
+                                                        <tr><th>Base Rate</th><td>
+                                                            <div style={{ fontWeight: 600 }}>₹{Number(item.financial.baseRateValue || 0).toLocaleString()}</div>
+                                                            <div style={{ fontSize: '10px', color: '#64748b' }}>
+                                                                {item.financial.baseRateType === 'PD_LOOSE' ? 'PD Loose' : item.financial.baseRateType === 'PD_WB' ? 'PD WB' : item.financial.baseRateType === 'MD_LOOSE' ? 'MD Loose' : item.financial.baseRateType === 'MD_WB' ? 'MD WB' : item.financial.baseRateType || 'N/A'}
+                                                                {item.financial.customDivisor ? ` (Divisor: ${item.financial.customDivisor})` : ''}
+                                                            </div>
+                                                        </td></tr>
+                                                        <tr><th>Sute</th><td>₹{Number(item.financial.totalSute || 0).toLocaleString()} ({item.financial.suteRate || 0} {item.financial.suteType === 'PER_BAG' ? 'per bag' : item.financial.suteType === 'PER_TON' ? 'per ton' : item.financial.suteType || ''})</td></tr>
+                                                        <tr><th>LF / Hamali</th><td>LF: ₹{Number(item.financial.lfinTotal || 0).toLocaleString()} / Ham: ₹{Number(item.financial.hamaliTotal || 0).toLocaleString()}</td></tr>
+                                                        <tr><th>Brokerage / EGB</th><td>Brk: ₹{Number(item.financial.brokerageTotal || 0).toLocaleString()} / EGB: ₹{Number(item.financial.egbTotal || 0).toLocaleString()}</td></tr>
+                                                        <tr><th>Average Rate</th><td style={{ fontWeight: 700, color: '#059669' }}>₹{Number(item.financial.average || 0).toFixed(2)}</td></tr>
+                                                        <tr><th>Total Amount</th><td style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px' }}>₹{Number(item.financial.totalAmount || 0).toLocaleString()}</td></tr>
+                                                    </tbody>
+                                                </ReviewTable>
+                                            ) : (
+                                                <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', background: '#fef3c7', borderRadius: '8px', fontSize: '12px' }}>
+                                                    ⏳ Financial calculation not yet completed for this lorry
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Grand Totals Table - only show if more than one entry */}
+                            {allInventoryAndFinancials.length > 1 && (
+                                <div style={{ marginTop: '0.5rem', border: '2px solid #2563eb', borderRadius: '12px', padding: '1rem 1.5rem', background: '#eff6ff' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#1e40af', marginBottom: '8px', textTransform: 'uppercase' }}>
+                                        📊 Grand Totals (All {allInventoryAndFinancials.length} Lorries)
+                                    </div>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                        <thead>
+                                            <tr style={{ background: '#dbeafe' }}>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'center' }}>#</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px' }}>Lorry</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Bags</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Net Wt (Kg)</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Sute</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>LF+Ham</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Brk+EGB</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Avg Rate</th>
+                                                <th style={{ border: '1px solid #bfdbfe', padding: '8px', textAlign: 'right' }}>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {allInventoryAndFinancials.map((item: any, idx: number) => (
+                                                <tr key={item.inspection.id} style={{ background: idx % 2 === 0 ? 'white' : '#f0f9ff' }}>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'center' }}>{idx + 1}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', fontWeight: 600 }}>{item.inspection.lorryNumber || 'N/A'}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right' }}>{item.inventory?.bags || 0}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right' }}>{Number(item.inventory?.netWeight || 0).toLocaleString()}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right' }}>₹{Number(item.financial?.totalSute || 0).toLocaleString()}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right' }}>₹{(Number(item.financial?.lfinTotal || 0) + Number(item.financial?.hamaliTotal || 0)).toLocaleString()}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right' }}>₹{(Number(item.financial?.brokerageTotal || 0) + Number(item.financial?.egbTotal || 0)).toLocaleString()}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>₹{Number(item.financial?.average || 0).toFixed(2)}</td>
+                                                    <td style={{ border: '1px solid #bfdbfe', padding: '6px', textAlign: 'right', fontWeight: 700 }}>₹{Number(item.financial?.totalAmount || 0).toLocaleString()}</td>
+                                                </tr>
+                                            ))}
+                                            <tr style={{ background: '#1e40af', color: 'white', fontWeight: 700 }}>
+                                                <td colSpan={2} style={{ border: '1px solid #1e3a8a', padding: '8px' }}>GRAND TOTAL</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>{grandTotalBags}</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>{grandTotalNetWeight.toLocaleString()}</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>₹{grandTotalSute.toLocaleString()}</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>₹{(grandTotalLfin + grandTotalHamali).toLocaleString()}</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>₹{(grandTotalBrokerage + grandTotalEgb).toLocaleString()}</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right' }}>-</td>
+                                                <td style={{ border: '1px solid #1e3a8a', padding: '8px', textAlign: 'right', fontSize: '14px' }}>₹{grandTotalAmount.toLocaleString()}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {/* Bottom Summary Bar */}
                 <div style={{ marginTop: '2.5rem', background: '#1e293b', color: '#fff', padding: '2rem', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: '3rem' }}>
                         <div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em' }}>NET AVERAGE RATE</div>
-                            <div style={{ fontSize: '32px', fontWeight: 800, color: '#10b981' }}>₹{Number(fc?.average || 0).toFixed(2)} <span style={{ fontSize: '14px', fontWeight: 400, color: '#94a3b8' }}>/ Q</span></div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em' }}>TOTAL ENTRIES</div>
+                            <div style={{ fontSize: '24px', fontWeight: 800, color: '#60a5fa' }}>{allInventoryAndFinancials.length} <span style={{ fontSize: '14px', fontWeight: 400, color: '#94a3b8' }}>lorr{allInventoryAndFinancials.length === 1 ? 'y' : 'ies'}</span></div>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em' }}>NET AVG RATE</div>
+                            <div style={{ fontSize: '32px', fontWeight: 800, color: '#10b981' }}>₹{grandAvgRate.toFixed(2)} <span style={{ fontSize: '14px', fontWeight: 400, color: '#94a3b8' }}>/ Q</span></div>
                         </div>
                         <div>
                             <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.05em' }}>GRAND TOTAL AMOUNT</div>
-                            <div style={{ fontSize: '32px', fontWeight: 800 }}>₹{Number(fc?.totalAmount || 0).toLocaleString()}</div>
+                            <div style={{ fontSize: '32px', fontWeight: 800 }}>₹{grandTotalAmount.toLocaleString()}</div>
                         </div>
                     </div>
                     {!readOnly && (

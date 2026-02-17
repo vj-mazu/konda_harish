@@ -2,53 +2,133 @@ const InventoryDataRepository = require('../repositories/InventoryDataRepository
 const ValidationService = require('./ValidationService');
 const AuditService = require('./AuditService');
 const WorkflowEngine = require('./WorkflowEngine');
+const { Kunchinittu, Variety } = require('../models/Location');
+const Outturn = require('../models/Outturn');
+const SampleEntry = require('../models/SampleEntry');
+const PhysicalInspection = require('../models/PhysicalInspection');
 
 class InventoryDataService {
-  /**
-   * Create inventory data
-   * @param {Object} inventoryData - Inventory data
-   * @param {number} userId - User ID creating the inventory data (inventory staff)
-   * @param {string} userRole - User role
-   * @returns {Promise<Object>} Created inventory data
-   */
   async createInventoryData(inventoryData, userId, userRole) {
     try {
-      // Validate input data
       const validation = ValidationService.validateInventoryData(inventoryData);
       if (!validation.valid) {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Validate required fields
       if (!inventoryData.physicalInspectionId) {
         throw new Error('Physical inspection ID is required');
       }
 
       inventoryData.recordedByUserId = userId;
 
-      // Map frontend 'date' field to model's 'entryDate' field
       if (!inventoryData.entryDate && inventoryData.date) {
         inventoryData.entryDate = inventoryData.date;
       }
 
-      // Net weight is auto-calculated by the model hook
-      // But we can also calculate it here for validation
+      // Variety validation
+      const entryVariety = (inventoryData.variety || '').toLowerCase().trim();
+
+      if (inventoryData.kunchinittuId) {
+        const kunchinittu = await Kunchinittu.findByPk(inventoryData.kunchinittuId, {
+          include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }]
+        });
+        if (kunchinittu && kunchinittu.variety) {
+          const kVariety = (kunchinittu.variety.name || '').toLowerCase().trim();
+          if (kVariety && entryVariety && !entryVariety.includes(kVariety) && !kVariety.includes(entryVariety)) {
+            throw new Error(`Variety mismatch: Entry variety "${inventoryData.variety}" does not match Kunchinittu "${kunchinittu.name}" variety "${kunchinittu.variety.name}". Please select a matching Kunchinittu.`);
+          }
+        }
+      }
+
+      if (inventoryData.outturnId) {
+        const outturn = await Outturn.findByPk(inventoryData.outturnId);
+        if (outturn && outturn.allottedVariety) {
+          const oVariety = (outturn.allottedVariety || '').toLowerCase().trim();
+          if (oVariety && entryVariety && !oVariety.includes(entryVariety) && !entryVariety.includes(oVariety)) {
+            throw new Error(`Variety mismatch: Entry variety "${inventoryData.variety}" does not match Outturn "${outturn.code}" allotted variety "${outturn.allottedVariety}". Please select a matching Outturn.`);
+          }
+        }
+      }
+
       inventoryData.netWeight = inventoryData.grossWeight - inventoryData.tareWeight;
 
-      // Create inventory data
-      const inventory = await InventoryDataRepository.create(inventoryData);
+      // Check current status and count of existing inventories
+      const entry = await SampleEntry.findByPk(inventoryData.sampleEntryId);
+      const currentStatus = entry.workflowStatus;
+      console.log('Current status before saving:', currentStatus);
 
-      // Log audit trail
-      await AuditService.logCreate(userId, 'inventory_data', inventory.id, inventory);
+      // Check if this specific lorry already has inventory
+      const existingForThisLorry = await InventoryDataRepository.findByPhysicalInspectionId(inventoryData.physicalInspectionId);
 
-      // Transition workflow to INVENTORY_ENTRY
-      await WorkflowEngine.transitionTo(
-        inventoryData.sampleEntryId,
-        'INVENTORY_ENTRY',
-        userId,
-        userRole,
-        { inventoryDataId: inventory.id }
-      );
+      // Check how many inventories already exist for this sample entry
+      const allInspections = await PhysicalInspection.findAll({
+        where: { sampleEntryId: inventoryData.sampleEntryId },
+        attributes: ['id']
+      });
+
+      let existingInventoryCount = 0;
+      for (const insp of allInspections) {
+        const inv = await InventoryDataRepository.findByPhysicalInspectionId(insp.id);
+        if (inv) existingInventoryCount++;
+      }
+
+      console.log('Existing inventories count:', existingInventoryCount);
+      console.log('Is this a new lorry?', !existingForThisLorry);
+
+      let inventory;
+      if (existingForThisLorry) {
+        // Update existing record (same lorry)
+        console.log('Updating existing inventory for this lorry');
+        inventory = await InventoryDataRepository.update(existingForThisLorry.id, inventoryData);
+        await AuditService.logUpdate(userId, 'inventory_data', existingForThisLorry.id, existingForThisLorry, inventory);
+      } else {
+        // Create new inventory data
+        inventory = await InventoryDataRepository.create(inventoryData);
+        await AuditService.logCreate(userId, 'inventory_data', inventory.id, inventory);
+      }
+
+      // ========== DECIDE WHETHER TO TRANSITION ==========
+      // KEY LOGIC:
+      // - If status is PHYSICAL_INSPECTION -> go to INVENTORY_ENTRY (first or subsequent time)
+      // - If adding new inventory (new lorry) at any intermediate/final stage -> go back to OWNER_FINANCIAL
+      //   This ensures second/third entries go through the full financial workflow again
+
+      if (currentStatus === 'PHYSICAL_INSPECTION') {
+        // Transition to INVENTORY_ENTRY (first or additional inventory while still at physical inspection)
+        try {
+          await WorkflowEngine.transitionTo(
+            inventoryData.sampleEntryId,
+            'INVENTORY_ENTRY',
+            userId,
+            userRole,
+            { inventoryDataId: inventory.id }
+          );
+          console.log('SUCCESS: Transitioned to INVENTORY_ENTRY');
+        } catch (err) {
+          console.log('Transition error:', err.message);
+        }
+      } else if (currentStatus === 'INVENTORY_ENTRY' && !existingForThisLorry) {
+        // Adding another lorry while still at INVENTORY_ENTRY - no workflow transition needed
+        // The owner will submit financial calculations for all lorries together
+        console.log('New lorry added at INVENTORY_ENTRY stage - no workflow transition needed');
+      } else if (['OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'].includes(currentStatus) && !existingForThisLorry) {
+        // New lorry/entry added after financial stages have already progressed
+        // Reset workflow back to OWNER_FINANCIAL so financial calculations happen again
+        try {
+          await WorkflowEngine.transitionTo(
+            inventoryData.sampleEntryId,
+            'OWNER_FINANCIAL',
+            userId,
+            userRole,
+            { inventoryDataId: inventory.id, newLorryAdded: true, previousStatus: currentStatus }
+          );
+          console.log(`SUCCESS: Transitioned from ${currentStatus} to OWNER_FINANCIAL (new lorry added)`);
+        } catch (err) {
+          console.log('Transition error:', err.message);
+        }
+      } else {
+        console.log('SKIPPING transition - status is', currentStatus, ', existing for this lorry:', !!existingForThisLorry);
+      }
 
       return inventory;
 
@@ -58,23 +138,10 @@ class InventoryDataService {
     }
   }
 
-  /**
-   * Get inventory data by physical inspection ID
-   * @param {number} physicalInspectionId - Physical inspection ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Object|null>} Inventory data or null
-   */
   async getInventoryDataByPhysicalInspection(physicalInspectionId, options = {}) {
     return await InventoryDataRepository.findByPhysicalInspectionId(physicalInspectionId, options);
   }
 
-  /**
-   * Update inventory data
-   * @param {number} id - Inventory data ID
-   * @param {Object} updates - Fields to update
-   * @param {number} userId - User ID performing the update
-   * @returns {Promise<Object|null>} Updated inventory data or null
-   */
   async updateInventoryData(id, updates, userId) {
     try {
       const current = await InventoryDataRepository.findById(id);
@@ -82,7 +149,6 @@ class InventoryDataService {
         throw new Error('Inventory data not found');
       }
 
-      // Validate updates if weights are being changed
       if (updates.grossWeight || updates.tareWeight) {
         const grossWeight = updates.grossWeight || current.grossWeight;
         const tareWeight = updates.tareWeight || current.tareWeight;
@@ -94,9 +160,7 @@ class InventoryDataService {
       }
 
       const updated = await InventoryDataRepository.update(id, updates);
-
       await AuditService.logUpdate(userId, 'inventory_data', id, current, updated);
-
       return updated;
 
     } catch (error) {

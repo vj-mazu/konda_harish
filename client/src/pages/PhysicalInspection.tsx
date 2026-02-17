@@ -72,21 +72,46 @@ const PhysicalInspection: React.FC = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      // Query for both LOT_ALLOTMENT and PHYSICAL_INSPECTION statuses
-      // LOT_ALLOTMENT = not yet started, PHYSICAL_INSPECTION = in progress
-      const lotAllotmentResponse = await axios.get(`${API_URL}/sample-entries/by-role?status=LOT_ALLOTMENT`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const physicalInspectionResponse = await axios.get(`${API_URL}/sample-entries/by-role?status=PHYSICAL_INSPECTION`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Query for multiple statuses - LOT_ALLOTMENT, PHYSICAL_INSPECTION, INVENTORY_ENTRY, OWNER_FINANCIAL, MANAGER_FINANCIAL, FINAL_REVIEW, COMPLETED
+      // This ensures lots don't disappear after first save or after completion
+      const [lotAllotmentResponse, physicalInspectionResponse, inventoryEntryResponse, ownerFinancialResponse, managerFinancialResponse, finalReviewResponse, completedResponse] = await Promise.all([
+        axios.get(`${API_URL}/sample-entries/by-role?status=LOT_ALLOTMENT`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=PHYSICAL_INSPECTION`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=INVENTORY_ENTRY`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=OWNER_FINANCIAL`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=MANAGER_FINANCIAL`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=FINAL_REVIEW`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/sample-entries/by-role?status=COMPLETED`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
 
       const lotAllotmentEntries = (lotAllotmentResponse.data as any).entries || [];
       const physicalInspectionEntries = (physicalInspectionResponse.data as any).entries || [];
+      const inventoryEntryEntries = (inventoryEntryResponse.data as any).entries || [];
+      const ownerFinancialEntries = (ownerFinancialResponse.data as any).entries || [];
+      const managerFinancialEntries = (managerFinancialResponse.data as any).entries || [];
+      const finalReviewEntries = (finalReviewResponse.data as any).entries || [];
+      const completedEntries = (completedResponse.data as any).entries || [];
 
-      // Combine both lists
-      const allEntries = [...lotAllotmentEntries, ...physicalInspectionEntries];
+      // Combine all lists and remove duplicates
+      const allMap = new Map();
+      [...lotAllotmentEntries, ...physicalInspectionEntries, ...inventoryEntryEntries, ...ownerFinancialEntries, ...managerFinancialEntries, ...finalReviewEntries, ...completedEntries].forEach(entry => {
+        allMap.set(entry.id, entry);
+      });
+      const allEntries = Array.from(allMap.values());
       setEntries(allEntries);
 
       // Load inspection progress for each entry
@@ -158,9 +183,15 @@ const PhysicalInspection: React.FC = () => {
       return;
     }
 
-    // Validate bags don't exceed remaining
+      // Validate bags don't exceed remaining
     if (progress && data.actualBags > progress.remainingBags) {
       showNotification(`Cannot inspect ${data.actualBags} bags. Only ${progress.remainingBags} bags remaining.`, 'error');
+      return;
+    }
+    
+    // Validate bags is not zero or negative
+    if (!data.actualBags || data.actualBags <= 0) {
+      showNotification('Please enter valid number of bags', 'error');
       return;
     }
 
@@ -252,19 +283,19 @@ const PhysicalInspection: React.FC = () => {
         backgroundColor: 'white',
         border: '1px solid #ddd'
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ backgroundColor: '#4a90e2', color: 'white' }}>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Date</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Broker</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Variety</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Party</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Location</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Total Bags</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Inspected</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Remaining</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Progress</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Actions</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '80px' }}>Date</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '80px' }}>Broker</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '80px' }}>Variety</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '100px' }}>Party</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '80px' }}>Location</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '80px' }}>Total</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '80px' }}>Inspected</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '80px' }}>Remaining</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'center', width: '120px' }}>Progress</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'center', width: '100px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -276,17 +307,41 @@ const PhysicalInspection: React.FC = () => {
               entries.map((entry, index) => {
                 const progress = inspectionProgress[entry.id];
                 const progressPercentage = progress?.progressPercentage || 0;
+                
+                // Check if this is a new lot (different from previous)
+                const prevEntry = entries[index - 1];
+                const isNewLot = !prevEntry || prevEntry.id !== entry.id;
 
                 return (
                   <React.Fragment key={entry.id}>
+                    {/* Add visual gap between different lots */}
+                    {isNewLot && index > 0 && (
+                      <tr>
+                        <td colSpan={10} style={{ 
+                          height: '15px', 
+                          backgroundColor: '#e0e0e0',
+                          borderLeft: '3px solid #4a90e2',
+                          borderRight: '3px solid #4a90e2'
+                        }}>
+                          <div style={{ 
+                            fontSize: '10px', 
+                            color: '#666', 
+                            padding: '0 10px',
+                            fontWeight: '600'
+                          }}>
+                            📦 New Lot: {entry.partyName} - {entry.variety} ({entry.bags} bags)
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     <tr style={{ backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>
                         {new Date(entry.entryDate).toLocaleDateString()}
                       </td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.brokerName}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.variety}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.partyName}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.location}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.brokerName}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.variety}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.partyName}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.location}</td>
                       <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px', fontWeight: '600' }}>
                         {progress?.totalBags || entry.bags}
                       </td>
@@ -296,7 +351,7 @@ const PhysicalInspection: React.FC = () => {
                       <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px', color: '#FF9800', fontWeight: '600' }}>
                         {progress?.remainingBags || entry.bags}
                       </td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px' }}>
+                      <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <div style={{
                             flex: 1,

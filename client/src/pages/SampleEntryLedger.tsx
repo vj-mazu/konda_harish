@@ -3,6 +3,7 @@ import axios from 'axios';
 import { sampleEntryApi } from '../utils/sampleEntryApi';
 import type { SampleEntryWithDetails, SampleEntryFilters } from '../types/sampleEntry';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -18,6 +19,8 @@ interface Variety {
 
 const SampleEntryLedger: React.FC = () => {
   const { showNotification } = useNotification();
+  const { user } = useAuth();
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager' || (user?.role as string) === 'owner';
   const [entries, setEntries] = useState<SampleEntryWithDetails[]>([]);
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
@@ -25,6 +28,9 @@ const SampleEntryLedger: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [total, setTotal] = useState(0);
+  const [editEntry, setEditEntry] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState<SampleEntryFilters>({
     startDate: '',
     endDate: '',
@@ -65,13 +71,14 @@ const SampleEntryLedger: React.FC = () => {
     }
   };
 
-  const loadLedger = useCallback(async (currentPage = page) => {
+  const loadLedger = useCallback(async (currentPage = page, overridePageSize?: number) => {
     try {
       setLoading(true);
+      const effectivePageSize = overridePageSize ?? pageSize;
       const response = await sampleEntryApi.getSampleEntryLedger({
         ...filters,
         page: currentPage,
-        pageSize
+        pageSize: effectivePageSize
       });
       // The API now returns { entries, total, page, pageSize }
       const data = response.data as any;
@@ -106,6 +113,128 @@ const SampleEntryLedger: React.FC = () => {
     setFilters(clearedFilters);
     setPage(1);
     loadLedger(1);
+  };
+
+  const openEditModal = (entry: any) => {
+    const inspections = entry.lotAllotment?.physicalInspections || [];
+    setEditEntry(entry);
+    setEditForm({
+      // Sample entry fields
+      partyName: entry.partyName || '',
+      brokerName: entry.brokerName || '',
+      variety: entry.variety || '',
+      location: entry.location || '',
+      bags: entry.bags || '',
+      lorryNumber: entry.lorryNumber || '',
+      offeringPrice: entry.offeringPrice || '',
+      finalPrice: entry.finalPrice || '',
+      priceType: entry.priceType || '',
+      // Quality parameters
+      moisture: entry.qualityParameters?.moisture || '',
+      cutting1: entry.qualityParameters?.cutting1 || '',
+      cutting2: entry.qualityParameters?.cutting2 || '',
+      bend: entry.qualityParameters?.bend || '',
+      mixS: entry.qualityParameters?.mixS || '',
+      mixL: entry.qualityParameters?.mixL || '',
+      mix: (entry.qualityParameters as any)?.mix || '',
+      kandu: (entry.qualityParameters as any)?.kandu || '',
+      oil: (entry.qualityParameters as any)?.oil || '',
+      sk: (entry.qualityParameters as any)?.sk || '',
+      grainsCount: (entry.qualityParameters as any)?.grainsCount || '',
+      wbR: (entry.qualityParameters as any)?.wbR || '',
+      wbBk: (entry.qualityParameters as any)?.wbBk || '',
+      wbT: (entry.qualityParameters as any)?.wbT || '',
+      paddyWb: (entry.qualityParameters as any)?.paddyWb || '',
+      // Physical inspections (edit each trip)
+      physicalInspections: inspections.map((insp: any) => ({
+        id: insp.id,
+        inspectionDate: insp.inspectionDate ? insp.inspectionDate.split('T')[0] : '',
+        lorryNumber: insp.lorryNumber || '',
+        bags: insp.bags || '',
+        cutting1: insp.cutting1 || '',
+        cutting2: insp.cutting2 || '',
+        bend: insp.bend || '',
+        remarks: insp.remarks || ''
+      }))
+    });
+  };
+
+  const handleEditFormChange = (field: string, value: any) => {
+    setEditForm((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const handleInspectionChange = (idx: number, field: string, value: any) => {
+    setEditForm((prev: any) => {
+      const updated = [...prev.physicalInspections];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...prev, physicalInspections: updated };
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editEntry) return;
+    setSaving(true);
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    try {
+      // 1. Update sample entry basic fields
+      await axios.put(`${API_URL}/sample-entries/${editEntry.id}`, {
+        partyName: editForm.partyName,
+        brokerName: editForm.brokerName,
+        variety: editForm.variety,
+        location: editForm.location,
+        bags: Number(editForm.bags),
+        lorryNumber: editForm.lorryNumber,
+        offeringPrice: editForm.offeringPrice ? Number(editForm.offeringPrice) : null,
+        finalPrice: editForm.finalPrice ? Number(editForm.finalPrice) : null,
+        priceType: editForm.priceType || null
+      }, { headers });
+
+      // 2. Update quality parameters (if they exist)
+      if (editEntry.qualityParameters) {
+        await axios.put(`${API_URL}/sample-entries/${editEntry.id}/quality-parameters`, {
+          moisture: editForm.moisture,
+          cutting1: editForm.cutting1,
+          cutting2: editForm.cutting2,
+          bend: editForm.bend,
+          mixS: editForm.mixS,
+          mixL: editForm.mixL,
+          mix: editForm.mix,
+          kandu: editForm.kandu,
+          oil: editForm.oil,
+          sk: editForm.sk,
+          grainsCount: editForm.grainsCount,
+          wbR: editForm.wbR,
+          wbBk: editForm.wbBk,
+          wbT: editForm.wbT,
+          paddyWb: editForm.paddyWb
+        }, { headers });
+      }
+
+      // 3. Update each physical inspection
+      for (const insp of editForm.physicalInspections || []) {
+        if (insp.id) {
+          await axios.put(`${API_URL}/sample-entries/${editEntry.id}/physical-inspection/${insp.id}`, {
+            inspectionDate: insp.inspectionDate,
+            lorryNumber: insp.lorryNumber,
+            bags: Number(insp.bags),
+            cutting1: Number(insp.cutting1),
+            cutting2: Number(insp.cutting2),
+            bend: Number(insp.bend),
+            remarks: insp.remarks
+          }, { headers });
+        }
+      }
+
+      showNotification('All changes saved successfully!', 'success');
+      setEditEntry(null);
+      loadLedger(page);
+    } catch (error: any) {
+      showNotification(error.response?.data?.error || 'Failed to save changes', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -266,7 +395,12 @@ const SampleEntryLedger: React.FC = () => {
                 fontWeight: 600,
                 fontSize: '8.5px',
                 textTransform: 'uppercase',
-                letterSpacing: '0.4px'
+                letterSpacing: '0.4px',
+                position: 'sticky',
+                top: 0,
+                zIndex: 10,
+                backgroundColor: '#1e3a5f',
+                textAlign: 'center'
               };
               return (
                 <tr style={{ backgroundColor: '#1e3a5f', color: '#fff' }}>
@@ -430,6 +564,24 @@ const SampleEntryLedger: React.FC = () => {
                       }}>
                         {entry.workflowStatus}
                       </span>
+                      {(entry.lotAllotment as any)?.closedAt && (
+                        <div
+                          title={`Closed: ${new Date((entry.lotAllotment as any).closedAt).toLocaleDateString()}\nInspected: ${(entry.lotAllotment as any).inspectedBags || 0} of ${(entry.lotAllotment as any).allottedBags || entry.bags} bags\nReason: ${(entry.lotAllotment as any).closedReason || 'N/A'}`}
+                          style={{
+                            marginTop: '2px',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            backgroundColor: '#fde8e8',
+                            color: '#c0392b',
+                            fontSize: '6.5px',
+                            fontWeight: 700,
+                            cursor: 'help',
+                            textAlign: 'center'
+                          }}
+                        >
+                          🔒 CLOSED ({(entry.lotAllotment as any).inspectedBags || 0}/{(entry.lotAllotment as any).allottedBags || entry.bags})
+                        </div>
+                      )}
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>{entry.qualityParameters?.moisture || '-'}</td>
                     <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 500 }}>
@@ -558,21 +710,40 @@ const SampleEntryLedger: React.FC = () => {
                       ) : '-'}
                     </td>
                     <td style={{ ...cellStyle, textAlign: 'center' }}>
-                      <button
-                        onClick={() => window.open(`/final-review?id=${entry.id}`, '_blank')}
-                        style={{
-                          fontSize: '7px',
-                          padding: '2px 6px',
-                          backgroundColor: '#1e3a5f',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '2px',
-                          cursor: 'pointer',
-                          fontWeight: 600
-                        }}
-                      >
-                        View
-                      </button>
+                      <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => window.open(`/final-review?id=${entry.id}`, '_blank')}
+                          style={{
+                            fontSize: '7px',
+                            padding: '2px 6px',
+                            backgroundColor: '#1e3a5f',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '2px',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                        >
+                          View
+                        </button>
+                        {isAdminOrManager && (
+                          <button
+                            onClick={() => openEditModal(entry)}
+                            style={{
+                              fontSize: '7px',
+                              padding: '2px 6px',
+                              backgroundColor: '#e67e22',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '2px',
+                              cursor: 'pointer',
+                              fontWeight: 600
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -599,9 +770,10 @@ const SampleEntryLedger: React.FC = () => {
           <select
             value={pageSize}
             onChange={(e) => {
-              setPageSize(Number(e.target.value));
+              const newSize = Number(e.target.value);
+              setPageSize(newSize);
               setPage(1);
-              loadLedger(1);
+              loadLedger(1, newSize);
             }}
             style={{ padding: '4px', borderRadius: '4px', border: '1px solid #ccc' }}
           >
@@ -609,6 +781,10 @@ const SampleEntryLedger: React.FC = () => {
             <option value={50}>50 per page</option>
             <option value={100}>100 per page</option>
             <option value={500}>500 per page</option>
+            <option value={1000}>1000 per page</option>
+            <option value={2000}>2000 per page</option>
+            <option value={5000}>5000 per page</option>
+            <option value={99999}>All</option>
           </select>
           <button
             disabled={page === 1}
@@ -638,6 +814,91 @@ const SampleEntryLedger: React.FC = () => {
           fontSize: '12px'
         }}>
           <strong>Total Entries: {entries.length}</strong>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editEntry && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+          paddingTop: '30px', overflowY: 'auto'
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', padding: '20px',
+            width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+              <h3 style={{ margin: 0, color: '#2c3e50' }}>✏️ Admin Edit — {editEntry.partyName} ({editEntry.variety})</h3>
+              <button onClick={() => setEditEntry(null)} style={{ fontSize: '18px', background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
+            </div>
+
+            {/* Section 1: Sample Entry */}
+            <div style={{ marginBottom: '15px' }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#1e3a5f', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>📋 Sample Entry Details</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {[{ l: 'Party Name', f: 'partyName' }, { l: 'Broker', f: 'brokerName' }, { l: 'Variety', f: 'variety' }, { l: 'Location', f: 'location' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Lorry No.', f: 'lorryNumber' }, { l: 'Offering ₹', f: 'offeringPrice', t: 'number' }, { l: 'Final ₹', f: 'finalPrice', t: 'number' }, { l: 'Price Type', f: 'priceType' }].map(({ l, f, t }) => (
+                  <div key={f}>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#666', marginBottom: '2px' }}>{l}</label>
+                    <input type={t || 'text'} value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
+                      style={{ width: '100%', padding: '5px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: Quality Parameters */}
+            {editEntry.qualityParameters && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#8e44ad', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🔬 Quality Parameters</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                  {[{ l: 'Moisture%', f: 'moisture' }, { l: 'Cut 1', f: 'cutting1' }, { l: 'Cut 2', f: 'cutting2' }, { l: 'Bend', f: 'bend' }, { l: 'Mix S', f: 'mixS' }, { l: 'Mix L', f: 'mixL' }, { l: 'Mix', f: 'mix' }, { l: 'Kandu', f: 'kandu' }, { l: 'Oil', f: 'oil' }, { l: 'SK', f: 'sk' }, { l: 'Grains', f: 'grainsCount' }, { l: 'WB R', f: 'wbR' }, { l: 'WB Bk', f: 'wbBk' }, { l: 'WB T', f: 'wbT' }, { l: 'Paddy WB', f: 'paddyWb' }].map(({ l, f }) => (
+                    <div key={f}>
+                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
+                      <input type="number" step="0.01" value={editForm[f] || ''} onChange={e => handleEditFormChange(f, e.target.value)}
+                        style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section 3: Physical Inspections */}
+            {editForm.physicalInspections?.length > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '13px', color: '#27ae60', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🏗️ Physical Inspections ({editForm.physicalInspections.length} trip(s))</h4>
+                {editForm.physicalInspections.map((insp: any, idx: number) => (
+                  <div key={insp.id || idx} style={{ backgroundColor: '#f8faf8', padding: '8px', borderRadius: '4px', marginBottom: '6px', border: '1px solid #e8e8e8' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#555', marginBottom: '4px' }}>Trip {idx + 1}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                      {[{ l: 'Date', f: 'inspectionDate', t: 'date' }, { l: 'Lorry', f: 'lorryNumber' }, { l: 'Bags', f: 'bags', t: 'number' }, { l: 'Cut 1', f: 'cutting1', t: 'number' }, { l: 'Cut 2', f: 'cutting2', t: 'number' }, { l: 'Bend', f: 'bend', t: 'number' }, { l: 'Remarks', f: 'remarks' }].map(({ l, f, t }) => (
+                        <div key={f}>
+                          <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#666', marginBottom: '1px' }}>{l}</label>
+                          <input type={t || 'text'} value={insp[f] || ''} onChange={e => handleInspectionChange(idx, f, e.target.value)}
+                            style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '3px', boxSizing: 'border-box' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '2px solid #eee', paddingTop: '12px' }}>
+              <button onClick={() => setEditEntry(null)} style={{ padding: '8px 20px', fontSize: '13px', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', backgroundColor: '#f5f5f5' }}>
+                Cancel
+              </button>
+              <button onClick={handleSaveEdit} disabled={saving} style={{
+                padding: '8px 25px', fontSize: '13px', border: 'none', borderRadius: '4px', cursor: saving ? 'not-allowed' : 'pointer',
+                backgroundColor: saving ? '#95a5a6' : '#27ae60', color: 'white', fontWeight: 700
+              }}>
+                {saving ? '⏳ Saving...' : '💾 Save All Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -4,30 +4,31 @@ const FinancialCalculator = require('./FinancialCalculator');
 const ValidationService = require('./ValidationService');
 const AuditService = require('./AuditService');
 const WorkflowEngine = require('./WorkflowEngine');
+const SampleEntry = require('../models/SampleEntry');
 
 class FinancialCalculationService {
   /**
    * Create financial calculation (Owner/Admin phase)
-   * @param {Object} calculationData - Financial calculation data
-   * @param {number} userId - User ID creating the calculation (owner/admin)
-   * @param {string} userRole - User role
-   * @returns {Promise<Object>} Created financial calculation
    */
   async createFinancialCalculation(calculationData, userId, userRole) {
     try {
-      // Validate input data
+      console.log('=== FinancialCalculationService.createFinancialCalculation ===');
+
       const validation = ValidationService.validateFinancialCalculation(calculationData);
+      console.log('Validation result:', validation);
+
       if (!validation.valid) {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Get inventory data for calculations
+      console.log('Looking for inventory with ID:', calculationData.inventoryDataId);
       const inventory = await InventoryDataRepository.findById(calculationData.inventoryDataId);
+      console.log('Found inventory:', inventory);
+
       if (!inventory) {
-        throw new Error('Inventory data not found');
+        throw new Error('Inventory data not found with ID: ' + calculationData.inventoryDataId);
       }
 
-      // Perform calculations
       const calculationContext = {
         actualNetWeight: inventory.netWeight,
         bags: inventory.bags,
@@ -46,30 +47,52 @@ class FinancialCalculationService {
         hamaliRate: calculationData.hamaliRate || 0
       };
 
+      console.log('Calculation context:', calculationContext);
       const result = FinancialCalculator.calculateComplete(calculationContext);
+      console.log('Calculation result:', result);
 
-      // Merge calculated values with input data
       const finalData = {
         ...calculationData,
         ...result,
+        inventoryDataId: calculationData.inventoryDataId,
         ownerCalculatedBy: userId,
-        calculationType: 'OWNER' // First calculation is by owner
+        calculationType: 'OWNER'
       };
 
-      // Create financial calculation
+      console.log('Final data to save:', finalData);
       const calculation = await FinancialCalculationRepository.create(finalData);
+      console.log('Created calculation:', calculation.id);
 
-      // Log audit trail
       await AuditService.logCreate(userId, 'financial_calculations', calculation.id, calculation);
 
-      // Transition workflow to OWNER_FINANCIAL
-      await WorkflowEngine.transitionTo(
-        calculationData.sampleEntryId,
-        'OWNER_FINANCIAL',
-        userId,
-        userRole,
-        { financialCalculationId: calculation.id }
-      );
+      // Check current workflow status
+      const sampleEntry = await SampleEntry.findByPk(calculationData.sampleEntryId);
+      const currentStatus = sampleEntry.workflowStatus;
+      console.log('Current workflow status:', currentStatus);
+
+      // Transition based on current status:
+      // - INVENTORY_ENTRY -> OWNER_FINANCIAL (first time)
+      // - OWNER_FINANCIAL -> OWNER_FINANCIAL (re-entry, new lorry added)
+      // - MANAGER_FINANCIAL -> OWNER_FINANCIAL (re-entry, new lorry added)
+      // - FINAL_REVIEW -> OWNER_FINANCIAL (new lorry added)
+      if (['INVENTORY_ENTRY', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'].includes(currentStatus)) {
+        try {
+          console.log('Transitioning workflow for sampleEntryId:', calculationData.sampleEntryId);
+          await WorkflowEngine.transitionTo(
+            calculationData.sampleEntryId,
+            'OWNER_FINANCIAL',
+            userId,
+            userRole,
+            { financialCalculationId: calculation.id }
+          );
+          console.log('Workflow transitioned successfully to OWNER_FINANCIAL!');
+        } catch (err) {
+          console.log('Workflow transition error:', err.message);
+          // Don't throw - financial calculation was saved successfully
+        }
+      } else {
+        console.log('SKIPPING workflow transition - status is', currentStatus);
+      }
 
       return calculation;
 
@@ -81,14 +104,9 @@ class FinancialCalculationService {
 
   /**
    * Create manager financial calculation
-   * @param {Object} calculationData - Financial calculation data
-   * @param {number} userId - User ID creating the calculation (manager)
-   * @param {string} userRole - User role
-   * @returns {Promise<Object>} Created financial calculation
    */
   async createManagerFinancialCalculation(calculationData, userId, userRole) {
     try {
-      // Similar to owner calculation but with MANAGER type
       const validation = ValidationService.validateFinancialCalculation(calculationData);
       if (!validation.valid) {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
@@ -133,14 +151,44 @@ class FinancialCalculationService {
 
       await AuditService.logCreate(userId, 'financial_calculations', calculation.id, calculation);
 
-      // Transition workflow to FINAL_REVIEW (manager calculations complete)
-      await WorkflowEngine.transitionTo(
-        calculationData.sampleEntryId,
-        'FINAL_REVIEW',
-        userId,
-        userRole,
-        { managerFinancialCalculationId: calculation.id }
-      );
+      // Check current status
+      const sampleEntry = await SampleEntry.findByPk(calculationData.sampleEntryId);
+      const currentStatus = sampleEntry.workflowStatus;
+      console.log('Manager financial - current status:', currentStatus);
+
+      // Transition based on current status:
+      // - OWNER_FINANCIAL -> MANAGER_FINANCIAL -> FINAL_REVIEW
+      if (currentStatus === 'OWNER_FINANCIAL') {
+        try {
+          await WorkflowEngine.transitionTo(
+            calculationData.sampleEntryId,
+            'MANAGER_FINANCIAL',
+            userId,
+            userRole,
+            { managerFinancialCalculationId: calculation.id }
+          );
+          console.log('Transitioned to MANAGER_FINANCIAL');
+        } catch (err) {
+          console.log('Workflow transition error:', err.message);
+        }
+      }
+
+      if (currentStatus === 'OWNER_FINANCIAL' || currentStatus === 'MANAGER_FINANCIAL') {
+        try {
+          await WorkflowEngine.transitionTo(
+            calculationData.sampleEntryId,
+            'FINAL_REVIEW',
+            userId,
+            userRole,
+            { managerFinancialCalculationId: calculation.id }
+          );
+          console.log('Transitioned to FINAL_REVIEW');
+        } catch (err) {
+          console.log('Workflow transition error:', err.message);
+        }
+      }
+
+      console.log('Manager financial saved, current status was:', currentStatus);
 
       return calculation;
 
@@ -150,22 +198,10 @@ class FinancialCalculationService {
     }
   }
 
-  /**
-   * Get financial calculation by inventory data ID
-   * @param {number} inventoryDataId - Inventory data ID
-   * @returns {Promise<Object|null>} Financial calculation or null
-   */
   async getFinancialCalculationByInventoryData(inventoryDataId) {
     return await FinancialCalculationRepository.findByInventoryDataId(inventoryDataId);
   }
 
-  /**
-   * Update financial calculation
-   * @param {number} id - Financial calculation ID
-   * @param {Object} updates - Fields to update
-   * @param {number} userId - User ID performing the update
-   * @returns {Promise<Object|null>} Updated financial calculation or null
-   */
   async updateFinancialCalculation(id, updates, userId) {
     try {
       const current = await FinancialCalculationRepository.findById(id);
@@ -173,7 +209,6 @@ class FinancialCalculationService {
         throw new Error('Financial calculation not found');
       }
 
-      // If calculation parameters are updated, recalculate
       if (updates.suteRate || updates.baseRate || updates.brokerageRate ||
         updates.egbRate || updates.lfinRate || updates.hamaliRate) {
 
@@ -213,12 +248,6 @@ class FinancialCalculationService {
     }
   }
 
-  /**
-   * Recalculate financial data
-   * @param {number} id - Financial calculation ID
-   * @param {number} userId - User ID
-   * @returns {Promise<Object>} Recalculated financial calculation
-   */
   async recalculate(id, userId) {
     try {
       const current = await FinancialCalculationRepository.findById(id);

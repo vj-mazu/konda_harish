@@ -18,9 +18,9 @@ class PhysicalInspectionService {
         throw new Error('Sample entry ID is required');
       }
 
-      if (!inspectionData.inspectionDate || !inspectionData.lorryNumber || 
-          !inspectionData.actualBags || inspectionData.cutting1 === undefined || 
-          inspectionData.cutting2 === undefined || inspectionData.bend === undefined) {
+      if (!inspectionData.inspectionDate || !inspectionData.lorryNumber ||
+        !inspectionData.actualBags || inspectionData.cutting1 === undefined ||
+        inspectionData.cutting2 === undefined || inspectionData.bend === undefined) {
         throw new Error('All required fields must be provided');
       }
 
@@ -34,15 +34,34 @@ class PhysicalInspectionService {
       }
 
       // Get lot allotment for this entry
+      console.log('🔍 DEBUG - looking for lotAllotment with sampleEntryId:', inspectionData.sampleEntryId);
       const lotAllotment = await LotAllotmentRepository.findBySampleEntryId(inspectionData.sampleEntryId);
+      console.log('🔍 DEBUG - lotAllotment found:', lotAllotment ? 'YES' : 'NO');
+      
       if (!lotAllotment) {
-        throw new Error('Lot allotment not found for this entry');
+        throw new Error('Lot allotment not found for this entry. Please have manager allot a supervisor first.');
       }
+
+      console.log('🔍 DEBUG - lotAllotment:', JSON.stringify(lotAllotment));
+      console.log('🔍 DEBUG - entry.bags:', entry.bags);
 
       // Get existing inspections to calculate remaining bags
       const existingInspections = await PhysicalInspectionRepository.findBySampleEntryId(inspectionData.sampleEntryId);
       const totalInspected = existingInspections.reduce((sum, i) => sum + (i.bags || 0), 0);
-      const remainingBags = entry.bags - totalInspected;
+
+      // Use allottedBags if available and greater than 0, otherwise use total bags from entry
+      const totalAllottedBags = (lotAllotment.allottedBags && lotAllotment.allottedBags > 0) ? lotAllotment.allottedBags : (entry.bags || 0);
+      
+      // Handle edge case where totalAllottedBags is 0
+      if (!totalAllottedBags || totalAllottedBags <= 0) {
+        throw new Error('Invalid bag count. Please contact manager to allot bags first.');
+      }
+      
+      console.log('🔍 DEBUG - lotAllotment.allottedBags:', lotAllotment.allottedBags);
+      console.log('🔍 DEBUG - entry.bags:', entry.bags);
+      console.log('🔍 DEBUG - totalAllottedBags:', totalAllottedBags, 'totalInspected:', totalInspected);
+      const remainingBags = totalAllottedBags - totalInspected;
+      console.log('🔍 DEBUG - remainingBags:', remainingBags);
 
       // Validate that actualBags doesn't exceed remaining
       if (inspectionData.actualBags > remainingBags) {
@@ -66,7 +85,7 @@ class PhysicalInspectionService {
 
       // Check if this completes the inspection (all bags inspected)
       const newTotalInspected = totalInspected + inspectionData.actualBags;
-      if (newTotalInspected >= entry.bags) {
+      if (newTotalInspected >= totalAllottedBags) {
         newInspectionData.isComplete = true;
       }
 
@@ -87,16 +106,10 @@ class PhysicalInspectionService {
         );
       }
 
-      // If all bags are inspected, transition to next stage (INVENTORY_DATA)
-      if (newInspectionData.isComplete) {
-        await WorkflowEngine.transitionTo(
-          inspectionData.sampleEntryId,
-          'INVENTORY_DATA',
-          userId,
-          userRole,
-          { allInspectionsComplete: true }
-        );
-      }
+      // NOTE: Do NOT auto-transition to INVENTORY_ENTRY here!
+      // Let Inventory Staff handle the transition after they add inventory data
+      // This was causing issues because physical_supervisor role is not allowed 
+      // to transition to INVENTORY_ENTRY
 
       return inspection;
 
@@ -181,14 +194,19 @@ class PhysicalInspectionService {
   async getInspectionProgress(sampleEntryId) {
     try {
       const SampleEntryRepository = require('../repositories/SampleEntryRepository');
-      
+      const LotAllotmentRepository = require('../repositories/LotAllotmentRepository');
+
       // Get the sample entry to know total bags
       const entry = await SampleEntryRepository.findById(sampleEntryId);
       if (!entry) {
         throw new Error('Sample entry not found');
       }
 
-      const totalBags = entry.bags;
+      // Get lot allotment to check allottedBags
+      const lotAllotment = await LotAllotmentRepository.findBySampleEntryId(sampleEntryId);
+
+      // Use allottedBags if available and greater than 0, otherwise use total bags from entry
+      const totalBags = (lotAllotment?.allottedBags && lotAllotment.allottedBags > 0) ? lotAllotment.allottedBags : (entry.bags || 0);
 
       // Get all inspections for this entry
       const inspections = await PhysicalInspectionRepository.findBySampleEntryId(sampleEntryId);
@@ -220,6 +238,20 @@ class PhysicalInspectionService {
 
     } catch (error) {
       console.error('Error getting inspection progress:', error);
+      throw error;
+    }
+  }
+
+  async updatePhysicalInspection(id, updates, userId) {
+    try {
+      const current = await PhysicalInspectionRepository.findById(id);
+      if (!current) {
+        throw new Error('Physical inspection not found');
+      }
+      const updated = await PhysicalInspectionRepository.update(id, updates);
+      return updated;
+    } catch (error) {
+      console.error('Error updating physical inspection:', error);
       throw error;
     }
   }

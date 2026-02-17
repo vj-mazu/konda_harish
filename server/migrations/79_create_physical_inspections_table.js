@@ -10,10 +10,10 @@ const { sequelize } = require('../config/database');
 
 async function up() {
   const queryInterface = sequelize.getQueryInterface();
-  
+
   try {
     console.log('🔄 Migration 79: Creating physical_inspections table...');
-    
+
     await queryInterface.createTable('physical_inspections', {
       id: {
         type: sequelize.Sequelize.UUID,
@@ -23,7 +23,6 @@ async function up() {
       lot_allotment_id: {
         type: sequelize.Sequelize.UUID,
         allowNull: false,
-        unique: true,
         references: {
           model: 'lot_allotments',
           key: 'id'
@@ -82,27 +81,26 @@ async function up() {
         defaultValue: sequelize.Sequelize.literal('CURRENT_TIMESTAMP')
       }
     });
-    
+
     // Performance indexes for 10 lakh+ records
     await queryInterface.addIndex('physical_inspections', ['lot_allotment_id'], {
-      name: 'idx_physical_inspections_lot_allotment',
-      unique: true
+      name: 'idx_physical_inspections_lot_allotment'
     });
-    
+
     await queryInterface.addIndex('physical_inspections', ['reported_by_user_id'], {
       name: 'idx_physical_inspections_reported_by'
     });
-    
+
     await queryInterface.addIndex('physical_inspections', ['inspection_date'], {
       name: 'idx_physical_inspections_date'
     });
-    
+
     await queryInterface.addIndex('physical_inspections', ['lorry_number'], {
       name: 'idx_physical_inspections_lorry'
     });
-    
+
     console.log('✅ Migration 79: physical_inspections table created successfully');
-    
+
   } catch (error) {
     console.error('❌ Migration 79 error:', error.message);
     throw error;
@@ -111,7 +109,7 @@ async function up() {
 
 async function down() {
   const queryInterface = sequelize.getQueryInterface();
-  
+
   try {
     console.log('🔄 Rolling back Migration 79...');
     await queryInterface.dropTable('physical_inspections');

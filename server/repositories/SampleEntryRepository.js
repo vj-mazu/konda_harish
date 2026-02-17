@@ -1,29 +1,13 @@
-const { SampleEntry, User, QualityParameters, CookingReport, LotAllotment, PhysicalInspection, InventoryData, FinancialCalculation } = require('../models');
+const { SampleEntry, User, QualityParameters, CookingReport, LotAllotment, PhysicalInspection, InventoryData, FinancialCalculation, Kunchinittu, Outturn } = require('../models');
+const { Variety } = require('../models/Location');
 const { Op } = require('sequelize');
 
 class SampleEntryRepository {
-  /**
-   * Create a new sample entry
-   * @param {Object} entryData - Sample entry data
-   * @returns {Promise<Object>} Created sample entry
-   */
   async create(entryData) {
     const entry = await SampleEntry.create(entryData);
     return entry.toJSON();
   }
 
-  /**
-   * Find sample entry by ID with optional associations
-   * @param {number} id - Sample entry ID
-   * @param {Object} options - Query options
-   * @param {boolean} options.includeQuality - Include quality parameters
-   * @param {boolean} options.includeCooking - Include cooking report
-   * @param {boolean} options.includeAllotment - Include lot allotment
-   * @param {boolean} options.includeInspection - Include physical inspection
-   * @param {boolean} options.includeInventory - Include inventory data
-   * @param {boolean} options.includeFinancial - Include financial calculations
-   * @returns {Promise<Object|null>} Sample entry or null
-   */
   async findById(id, options = {}) {
     const include = [];
 
@@ -40,17 +24,20 @@ class SampleEntryRepository {
         include: options.includeInspection ? [
           {
             model: PhysicalInspection,
-            as: 'physicalInspection',
+            as: 'physicalInspections',
             include: options.includeInventory ? [
               {
                 model: InventoryData,
                 as: 'inventoryData',
-                include: options.includeFinancial ? [
-                  { model: FinancialCalculation, as: 'financialCalculation' }
-                ] : []
+                include: [
+                  ...(options.includeFinancial ? [{ model: FinancialCalculation, as: 'financialCalculation' }] : []),
+                  { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                  { model: Outturn, as: 'outturn', required: false }
+                ]
               }
             ] : []
-          }
+          },
+          { model: User, as: 'supervisor', attributes: ['id', 'username'] }
         ] : []
       });
     }
@@ -59,16 +46,6 @@ class SampleEntryRepository {
     return entry ? entry.toJSON() : null;
   }
 
-  /**
-   * Find sample entries by workflow status
-   * @param {string} status - Workflow status
-   * @param {Object} options - Query options
-   * @param {number} options.limit - Limit results
-   * @param {number} options.offset - Offset for pagination
-   * @param {string} options.orderBy - Order by field
-   * @param {string} options.orderDir - Order direction (ASC/DESC)
-   * @returns {Promise<Array>} Array of sample entries
-   */
   async findByStatus(status, options = {}) {
     const queryOptions = {
       where: { workflowStatus: status },
@@ -81,33 +58,19 @@ class SampleEntryRepository {
     return entries.map(entry => entry.toJSON());
   }
 
-  /**
-   * Find sample entries by user role and workflow status
-   * @param {string} role - User role
-   * @param {Object} filters - Filter options
-   * @param {string} filters.status - Workflow status filter
-   * @param {Date} filters.startDate - Start date filter
-   * @param {Date} filters.endDate - End date filter
-   * @param {string} filters.broker - Broker name filter
-   * @param {string} filters.variety - Variety filter
-   * @param {string} filters.party - Party name filter
-   * @param {string} filters.location - Location filter
-   * @param {number} filters.limit - Limit results
-   * @param {number} filters.offset - Offset for pagination
-   * @returns {Promise<Object>} Object with entries and total count
-   */
   async findByRoleAndFilters(role, filters = {}, userId) {
     const where = {};
 
     // Role-based filtering
+    // FIX: inventory_staff can now see more statuses for second time inventory entries
     const roleStatusMap = {
       staff: ['STAFF_ENTRY'],
-      quality_supervisor: ['STAFF_ENTRY', 'QUALITY_CHECK'], // See entries waiting for quality check AND in quality check
-      owner: null, // Owner sees all
-      admin: null, // Admin sees all
-      manager: ['QUALITY_CHECK', 'LOT_SELECTION', 'COOKING_REPORT', 'FINAL_REPORT', 'LOT_ALLOTMENT', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'], // Manager participates in many stages
-      physical_supervisor: ['LOT_ALLOTMENT', 'PHYSICAL_INSPECTION'], // See entries waiting for inspection AND in progress
-      inventory_staff: ['PHYSICAL_INSPECTION', 'INVENTORY_ENTRY'], // See entries waiting for inventory AND in progress
+      quality_supervisor: ['STAFF_ENTRY', 'QUALITY_CHECK'],
+      owner: null,
+      admin: null,
+      manager: ['QUALITY_CHECK', 'LOT_SELECTION', 'COOKING_REPORT', 'FINAL_REPORT', 'LOT_ALLOTMENT', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'],
+      physical_supervisor: ['LOT_ALLOTMENT', 'PHYSICAL_INSPECTION'],
+      inventory_staff: ['PHYSICAL_INSPECTION', 'INVENTORY_ENTRY', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'], // FIX: See entries for second time inventory too
       financial_account: ['OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW']
     };
 
@@ -116,16 +79,13 @@ class SampleEntryRepository {
     } else if (roleStatusMap[role] !== null && roleStatusMap[role]) {
       where.workflowStatus = roleStatusMap[role];
     }
-    // If roleStatusMap[role] is null (admin/owner), don't filter by status - show all
 
-    // Date range filter
     if (filters.startDate || filters.endDate) {
       where.entryDate = {};
       if (filters.startDate) where.entryDate[Op.gte] = filters.startDate;
       if (filters.endDate) where.entryDate[Op.lte] = filters.endDate;
     }
 
-    // Other filters
     if (filters.broker) where.brokerName = { [Op.like]: `%${filters.broker}%` };
     if (filters.variety) where.variety = { [Op.like]: `%${filters.variety}%` };
     if (filters.party) where.partyName = { [Op.like]: `%${filters.party}%` };
@@ -148,7 +108,7 @@ class SampleEntryRepository {
         {
           model: LotAllotment,
           as: 'lotAllotment',
-          required: role === 'physical_supervisor', // Force join for supervisor filtering
+          required: role === 'physical_supervisor',
           where: (role === 'physical_supervisor' && userId) ? { allottedToSupervisorId: userId } : undefined,
           include: [
             { model: User, as: 'supervisor', attributes: ['id', 'username'] },
@@ -172,7 +132,9 @@ class SampleEntryRepository {
                         { model: User, as: 'owner', attributes: ['id', 'username'] },
                         { model: User, as: 'manager', attributes: ['id', 'username'] }
                       ]
-                    }
+                    },
+                    { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                    { model: Outturn, as: 'outturn', required: false }
                   ]
                 }
               ]
@@ -180,7 +142,7 @@ class SampleEntryRepository {
           ]
         }
       ],
-      limit: filters.limit || 100,
+      limit: filters.limit || 500,
       offset: filters.offset || 0,
       order: [['createdAt', 'DESC']],
       distinct: true,
@@ -195,12 +157,6 @@ class SampleEntryRepository {
     };
   }
 
-  /**
-   * Update sample entry
-   * @param {number} id - Sample entry ID
-   * @param {Object} updates - Fields to update
-   * @returns {Promise<Object|null>} Updated entry or null
-   */
   async update(id, updates) {
     const entry = await SampleEntry.findByPk(id);
     if (!entry) return null;
@@ -209,11 +165,6 @@ class SampleEntryRepository {
     return entry.toJSON();
   }
 
-  /**
-   * Get sample entry ledger with all related data
-   * @param {Object} filters - Filter options
-   * @returns {Promise<Array>} Array of complete sample entry records
-   */
   async getLedger(filters = {}) {
     const where = {};
 
@@ -270,7 +221,9 @@ class SampleEntryRepository {
                         { model: User, as: 'owner', attributes: ['id', 'username'] },
                         { model: User, as: 'manager', attributes: ['id', 'username'] }
                       ]
-                    }
+                    },
+                    { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                    { model: Outturn, as: 'outturn', required: false }
                   ]
                 }
               ]

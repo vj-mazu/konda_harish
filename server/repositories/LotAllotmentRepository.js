@@ -13,11 +13,11 @@ class LotAllotmentRepository {
     const existing = await LotAllotment.findOne({
       where: { sampleEntryId: allotmentData.sampleEntryId }
     });
-    
+
     if (existing) {
       throw new Error('Sample entry already has a lot allotment');
     }
-    
+
     const allotment = await LotAllotment.create(allotmentData);
     return allotment.toJSON();
   }
@@ -31,11 +31,11 @@ class LotAllotmentRepository {
    */
   async findById(id, options = {}) {
     const include = [];
-    
+
     if (options.includeInspection) {
-      include.push({ model: PhysicalInspection, as: 'physicalInspection' });
+      include.push({ model: PhysicalInspection, as: 'physicalInspections' });
     }
-    
+
     const allotment = await LotAllotment.findByPk(id, { include });
     return allotment ? allotment.toJSON() : null;
   }
@@ -49,22 +49,22 @@ class LotAllotmentRepository {
    */
   async findByPhysicalSupervisorId(physicalSupervisorId, options = {}) {
     const where = { allottedToSupervisorId: physicalSupervisorId };
-    
+
     const queryOptions = {
       where,
-      include: [{ model: PhysicalInspection, as: 'physicalInspection' }],
+      include: [{ model: PhysicalInspection, as: 'physicalInspections' }],
       order: [['createdAt', 'DESC']]
     };
-    
+
     const allotments = await LotAllotment.findAll(queryOptions);
-    
+
     let results = allotments.map(allotment => allotment.toJSON());
-    
+
     // Filter for pending only if requested
     if (options.pendingOnly) {
-      results = results.filter(allotment => !allotment.physicalInspection);
+      results = results.filter(allotment => !allotment.physicalInspections?.length);
     }
-    
+
     return results;
   }
 
@@ -89,7 +89,7 @@ class LotAllotmentRepository {
   async update(id, updates) {
     const allotment = await LotAllotment.findByPk(id);
     if (!allotment) return null;
-    
+
     await allotment.update(updates);
     return allotment.toJSON();
   }

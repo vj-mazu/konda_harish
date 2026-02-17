@@ -202,8 +202,42 @@ const InventoryEntry: React.FC = () => {
     const loadEntries = async () => {
         try {
             setLoading(true);
-            const response = await sampleEntryApi.getSampleEntriesByRole({ status: 'PHYSICAL_INSPECTION' });
-            setEntries(response.data.entries || []);
+            // Fetch from all statuses to show entries that need additional inventory
+            const [physicalResponse, inventoryResponse, ownerFinResponse, managerFinResponse, finalReviewResponse] = await Promise.all([
+                sampleEntryApi.getSampleEntriesByRole({ status: 'PHYSICAL_INSPECTION' }),
+                sampleEntryApi.getSampleEntriesByRole({ status: 'INVENTORY_ENTRY' }),
+                sampleEntryApi.getSampleEntriesByRole({ status: 'OWNER_FINANCIAL' }),
+                sampleEntryApi.getSampleEntriesByRole({ status: 'MANAGER_FINANCIAL' }),
+                sampleEntryApi.getSampleEntriesByRole({ status: 'FINAL_REVIEW' })
+            ]);
+            
+            const physicalEntries = physicalResponse.data.entries || [];
+            const inventoryEntries = inventoryResponse.data.entries || [];
+            const ownerFinEntries = ownerFinResponse.data.entries || [];
+            const managerFinEntries = managerFinResponse.data.entries || [];
+            const finalReviewEntries = finalReviewResponse.data.entries || [];
+            
+            // Combine entries from all statuses
+            const allMap = new Map();
+            [...physicalEntries, ...inventoryEntries, ...ownerFinEntries, ...managerFinEntries, ...finalReviewEntries].forEach((entry: any) => {
+                allMap.set(entry.id, entry);
+            });
+            
+            // FILTER: Only show entries that have lorries WITHOUT inventory
+            const filteredEntries = Array.from(allMap.values()).filter((entry: any) => {
+                const inspections = entry.lotAllotment?.physicalInspections || [];
+                if (!inspections || inspections.length === 0) return true;
+                
+                const lorriesWithInventory = inspections.filter((i: any) => i.inventoryData);
+                const lorriesWithInventoryNumbers = new Set(lorriesWithInventory.map((i: any) => i.lorryNumber).filter(Boolean));
+                
+                // Check if there are lorries WITHOUT inventory
+                const lorriesWithoutInventory = inspections.filter((i: any) => !lorriesWithInventoryNumbers.has(i.lorryNumber));
+                
+                return lorriesWithoutInventory.length > 0;
+            });
+            
+            setEntries(filteredEntries);
         } catch (error) {
             showNotification('Failed to load pending lots', 'error');
         } finally {
@@ -211,28 +245,49 @@ const InventoryEntry: React.FC = () => {
         }
     };
 
-    // Show ALL kunchinittus, sorted with matching varieties first
-    const filteredKunchinittus = [...kunchinittus].sort((a: any, b: any) => {
-        if (!selectedEntry?.variety) return 0;
+    const matchingKunchinittus = kunchinittus.filter((k: any) => {
+        if (!selectedEntry?.variety) return true;
         const entryVariety = selectedEntry.variety.toLowerCase().trim();
-        const aName = (a.variety?.name || '').toLowerCase().trim();
-        const bName = (b.variety?.name || '').toLowerCase().trim();
-        const aMatch = aName === entryVariety || entryVariety.includes(aName) || aName.includes(entryVariety);
-        const bMatch = bName === entryVariety || entryVariety.includes(bName) || bName.includes(entryVariety);
-        if (aMatch && !bMatch) return -1;
-        if (!aMatch && bMatch) return 1;
-        return (a.name || '').localeCompare(b.name || '');
+        const kVariety = (k.variety?.name || '').toLowerCase().trim();
+        return kVariety && (entryVariety.includes(kVariety) || kVariety.includes(entryVariety));
+    });
+    const otherKunchinittus = kunchinittus.filter((k: any) => {
+        if (!selectedEntry?.variety) return false;
+        const entryVariety = selectedEntry.variety.toLowerCase().trim();
+        const kVariety = (k.variety?.name || '').toLowerCase().trim();
+        return !kVariety || (!entryVariety.includes(kVariety) && !kVariety.includes(entryVariety));
+    });
+
+    const matchingOutturns = outturns.filter((o: any) => {
+        if (!selectedEntry?.variety) return true;
+        const entryVariety = selectedEntry.variety.toLowerCase().trim();
+        const oVariety = (o.allottedVariety || '').toLowerCase().trim();
+        return !oVariety || entryVariety.includes(oVariety) || oVariety.includes(entryVariety);
+    });
+    const otherOutturns = outturns.filter((o: any) => {
+        if (!selectedEntry?.variety) return false;
+        const entryVariety = selectedEntry.variety.toLowerCase().trim();
+        const oVariety = (o.allottedVariety || '').toLowerCase().trim();
+        return oVariety && !entryVariety.includes(oVariety) && !oVariety.includes(entryVariety);
     });
 
     const handleOpenModal = (entry: any) => {
         setSelectedEntry(entry);
         setSelectedKunchinittuId(null);
         setSelectedOutturnId(null);
-        const inspection = entry.lotAllotment?.physicalInspections?.[0] || entry.lotAllotment?.physicalInspection;
+        const inspections = entry.lotAllotment?.physicalInspections || [];
+        
+        const lorriesWithInventory = inspections.filter((i: any) => i.inventoryData);
+        const lorriesWithInventoryNumbers = new Set(lorriesWithInventory.map((i: any) => i.lorryNumber).filter(Boolean));
+        
+        const bagsWithoutInventory = inspections
+            .filter((i: any) => !lorriesWithInventoryNumbers.has(i.lorryNumber))
+            .reduce((sum: number, i: any) => sum + (i.bags || 0), 0);
+
         setFormData({
             date: new Date().toISOString().split('T')[0],
             variety: entry.variety,
-            bags: inspection?.bags || entry.bags,
+            bags: bagsWithoutInventory,
             moisture: entry.qualityParameters?.moisture || 0,
             wbNumber: '',
             grossWeight: 0,
@@ -252,8 +307,19 @@ const InventoryEntry: React.FC = () => {
                 showNotification('Please select an Outturn', 'error');
                 return;
             }
-            const physicalInspectionId = selectedEntry?.lotAllotment?.physicalInspections?.[0]?.id
-                || selectedEntry?.lotAllotment?.physicalInspection?.id;
+            
+            const inspections = selectedEntry?.lotAllotment?.physicalInspections || [];
+            const lorriesWithInventory = inspections.filter((i: any) => i.inventoryData);
+            const lorriesWithInventoryNumbers = new Set(lorriesWithInventory.map((i: any) => i.lorryNumber).filter(Boolean));
+            const lorriesWithoutInventory = inspections.filter((i: any) => !lorriesWithInventoryNumbers.has(i.lorryNumber));
+            
+            const physicalInspectionId = lorriesWithoutInventory[0]?.id;
+            
+            if (!physicalInspectionId) {
+                showNotification('No lorries without inventory data found', 'error');
+                return;
+            }
+            
             await sampleEntryApi.createInventoryData(selectedEntry.id, {
                 ...formData,
                 entryDate: formData.date,
@@ -304,8 +370,44 @@ const InventoryEntry: React.FC = () => {
                                     <Td>{entry.variety}</Td>
                                     <Td>{entry.partyName}</Td>
                                     <Td>{entry.location}</Td>
-                                    <Td>{entry.lotAllotment?.physicalInspections?.[0]?.bags || entry.lotAllotment?.physicalInspection?.bags || entry.bags}</Td>
-                                    <Td>{entry.lotAllotment?.physicalInspections?.[0]?.lorryNumber || entry.lotAllotment?.physicalInspection?.lorryNumber || entry.lorryNumber || '-'}</Td>
+                                    <Td>
+                                        {(() => {
+                                            const inspections = entry.lotAllotment?.physicalInspections || [];
+                                            const lotAllotment = entry.lotAllotment as any;
+                                            if (lotAllotment?.closedAt) {
+                                                return <span style={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                                                    {lotAllotment.inspectedBags} (CLOSED)
+                                                </span>;
+                                            }
+                                            
+                                            const lorriesWithInventory = inspections.filter((i: any) => i.inventoryData);
+                                            const lorriesWithInventoryNumbers = new Set(lorriesWithInventory.map((i: any) => i.lorryNumber).filter(Boolean));
+                                            
+                                            const bagsWithoutInventory = inspections
+                                                .filter((i: any) => !lorriesWithInventoryNumbers.has(i.lorryNumber))
+                                                .reduce((sum: number, i: any) => sum + (i.bags || 0), 0);
+                                            
+                                            return bagsWithoutInventory > 0 ? bagsWithoutInventory : '-';
+                                        })()}
+                                    </Td>
+                                    <Td>
+                                        {(() => {
+                                            const inspections = entry.lotAllotment?.physicalInspections || [];
+                                            const lorriesWithInventory = entry.lotAllotment?.physicalInspections?.filter((i: any) => i.inventoryData) || [];
+                                            const lorriesWithInventoryNumbers = new Set(lorriesWithInventory.map((i: any) => i.lorryNumber).filter(Boolean));
+                                            
+                                            const lorriesWithoutInventory = inspections.filter((i: any) => !lorriesWithInventoryNumbers.has(i.lorryNumber));
+                                            
+                                            const lorryNumbers = lorriesWithoutInventory
+                                                .map((i: any) => i.lorryNumber)
+                                                .filter(Boolean);
+                                            
+                                            if (lorryNumbers.length > 0) {
+                                                return lorryNumbers.join(', ');
+                                            }
+                                            return '-';
+                                        })()}
+                                    </Td>
                                     <Td>
                                         <ActionButton onClick={() => handleOpenModal(entry)}>
                                             Record Weight
@@ -420,36 +522,65 @@ const InventoryEntry: React.FC = () => {
 
                             {formData.location === 'DIRECT_KUNCHINITTU' && (
                                 <FormGroup>
-                                    <Label>Select Kunchinittu</Label>
+                                    <Label>Select Kunchinittu {selectedEntry?.variety ? <span style={{ color: '#10b981', fontSize: '12px' }}>(Variety: {selectedEntry.variety})</span> : ''}</Label>
                                     <Select
                                         value={selectedKunchinittuId || ''}
                                         onChange={e => setSelectedKunchinittuId(Number(e.target.value) || null)}
                                         required
                                     >
                                         <option value="">-- Select Kunchinittu --</option>
-                                        {filteredKunchinittus.map((k: any) => (
-                                            <option key={k.id} value={k.id}>
-                                                {k.name} {k.variety?.name ? `| ${k.variety.name}` : ''} {k.warehouse?.name ? `| WH: ${k.warehouse.name}` : ''}
-                                            </option>
-                                        ))}
+                                        {matchingKunchinittus.length > 0 && (
+                                            <optgroup label={`✅ Matching variety (${selectedEntry?.variety || ''})`}>
+                                                {matchingKunchinittus.map((k: any) => (
+                                                    <option key={k.id} value={k.id}>
+                                                        {k.name} | {k.variety?.name || 'No variety'} {k.warehouse?.name ? `| WH: ${k.warehouse.name}` : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {otherKunchinittus.length > 0 && (
+                                            <optgroup label="⚠️ Other varieties (will be rejected)">
+                                                {otherKunchinittus.map((k: any) => (
+                                                    <option key={k.id} value={k.id} style={{ color: '#999' }}>
+                                                        {k.name} | {k.variety?.name || 'No variety'} {k.warehouse?.name ? `| WH: ${k.warehouse.name}` : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
                                     </Select>
+                                    {matchingKunchinittus.length === 0 && (
+                                        <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px' }}>⚠️ No kunchinittus match variety "{selectedEntry?.variety}".</div>
+                                    )}
                                 </FormGroup>
                             )}
 
                             {formData.location === 'DIRECT_OUTTURN_PRODUCTION' && (
                                 <FormGroup>
-                                    <Label>Select Outturn</Label>
+                                    <Label>Select Outturn {selectedEntry?.variety ? <span style={{ color: '#10b981', fontSize: '12px' }}>(Variety: {selectedEntry.variety})</span> : ''}</Label>
                                     <Select
                                         value={selectedOutturnId || ''}
                                         onChange={e => setSelectedOutturnId(Number(e.target.value) || null)}
                                         required
                                     >
                                         <option value="">-- Select Outturn --</option>
-                                        {outturns.map((o: any) => (
-                                            <option key={o.id} value={o.id}>
-                                                {o.outturnNumber || o.code} - {o.allottedVariety || o.variety || ''}
-                                            </option>
-                                        ))}
+                                        {matchingOutturns.length > 0 && (
+                                            <optgroup label={`✅ Matching variety (${selectedEntry?.variety || ''})`}>
+                                                {matchingOutturns.map((o: any) => (
+                                                    <option key={o.id} value={o.id}>
+                                                        {o.outturnNumber || o.code} - {o.allottedVariety || o.variety || 'No variety'}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {otherOutturns.length > 0 && (
+                                            <optgroup label="⚠️ Other varieties (will be rejected)">
+                                                {otherOutturns.map((o: any) => (
+                                                    <option key={o.id} value={o.id} style={{ color: '#999' }}>
+                                                        {o.outturnNumber || o.code} - {o.allottedVariety || o.variety || 'No variety'}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
                                     </Select>
                                 </FormGroup>
                             )}

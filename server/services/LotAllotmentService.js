@@ -17,11 +17,29 @@ class LotAllotmentService {
         throw new Error('Sample entry ID and physical supervisor ID are required');
       }
 
+      // Get the sample entry to know total bags (for default allottedBags)
+      const SampleEntryRepository = require('../repositories/SampleEntryRepository');
+      const entry = await SampleEntryRepository.findById(allotmentData.sampleEntryId);
+      
+      console.log('🔍 DEBUG LotAllotmentService - entry:', JSON.stringify(entry));
+      console.log('🔍 DEBUG LotAllotmentService - entry.bags:', entry?.bags);
+      
+      // Use provided allottedBags or default to total bags from entry
+      // If allottedBags is provided and valid, use it; otherwise use entry.bags
+      let allottedBags = null;
+      if (allotmentData.allottedBags && allotmentData.allottedBags > 0) {
+        allottedBags = allotmentData.allottedBags;
+      } else if (entry?.bags && entry.bags > 0) {
+        allottedBags = entry.bags;
+      }
+      console.log('🔍 DEBUG LotAllotmentService - allottedBags:', allottedBags);
+
       // Map to correct field names for the model
       const lotData = {
         sampleEntryId: allotmentData.sampleEntryId,
         allottedByManagerId: userId,
-        allottedToSupervisorId: allotmentData.physicalSupervisorId
+        allottedToSupervisorId: allotmentData.physicalSupervisorId,
+        allottedBags: allottedBags
       };
 
       // Create lot allotment

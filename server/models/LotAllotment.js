@@ -46,6 +46,41 @@ const LotAllotment = sequelize.define('LotAllotment', {
     allowNull: false,
     defaultValue: DataTypes.NOW,
     field: 'allotted_at'
+  },
+  allottedBags: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'allotted_bags',
+    comment: 'Number of bags allotted to supervisor (partial lot)'
+  },
+  inspectedBags: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0,
+    field: 'inspected_bags',
+    comment: 'Total bags actually inspected before closing'
+  },
+  closedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'closed_at',
+    comment: 'When the lot was closed by manager'
+  },
+  closedByUserId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'closed_by_user_id',
+    references: {
+      model: 'users',
+      key: 'id'
+    },
+    comment: 'Manager who closed the lot'
+  },
+  closedReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'closed_reason',
+    comment: 'Reason for closing (e.g. Party only sent 2000 of 4000 bags)'
   }
 }, {
   tableName: 'lot_allotments',

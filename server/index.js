@@ -1262,6 +1262,51 @@ const startServer = async () => {
         console.log('⚠️ Migration 90 warning:', error.message);
       }
 
+      // Migration 91: Ultimate Performance Indexes (NEW - for 10 lakh records)
+      try {
+        const ultimateIndexes = require('./migrations/91_add_ultimate_performance_indexes');
+        await ultimateIndexes.up();
+        console.log('✅ Migration 91: Ultimate performance indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 91 warning:', error.message);
+      }
+
+      // Migration 92: Add allotted_bags to lot_allotments (for partial lot tracking)
+      try {
+        const { sequelize: seq } = require('./config/database');
+
+        // Check if column exists
+        const [results] = await seq.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'lot_allotments' 
+          AND column_name = 'allotted_bags'
+        `);
+
+        if (results.length > 0) {
+          console.log('✅ Migration 92: allotted_bags column already exists');
+        } else {
+          await seq.query(`
+            ALTER TABLE lot_allotments 
+            ADD COLUMN allotted_bags INTEGER
+          `);
+          console.log('✅ Migration 92: allotted_bags column added to lot_allotments');
+        }
+      } catch (error) {
+        console.log('⚠️ Migration 92 warning:', error.message);
+      }
+
+      // Migration 93: Add close lot fields (inspected_bags, closed_at, closed_by_user_id, closed_reason)
+      // CRITICAL: Without this, lot allotment queries fail with "column inspected_bags does not exist"
+      try {
+        const addCloseLotFields = require('./migrations/92_add_close_lot_fields');
+        const queryInterface = sequelize.getQueryInterface();
+        await addCloseLotFields.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 93: Close lot fields added to lot_allotments');
+      } catch (error) {
+        console.log('⚠️ Migration 93 warning:', error.message);
+      }
+
       console.log('✅ Migrations completed.');
     }
 

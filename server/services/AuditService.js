@@ -14,7 +14,7 @@ class AuditService {
    */
   async logAction(actionData) {
     const { userId, tableName, recordId, actionType, oldValues, newValues } = actionData;
-    
+
     const logEntry = {
       userId,
       tableName,
@@ -23,7 +23,7 @@ class AuditService {
       oldValues: oldValues || null,
       newValues: newValues || null
     };
-    
+
     return await AuditLogRepository.create(logEntry);
   }
 

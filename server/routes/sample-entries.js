@@ -150,7 +150,81 @@ router.post('/:id/quality-parameters', authenticateToken, async (req, res) => {
   }
 });
 
-// Transition to LOT_SELECTION (Owner/Admin)
+// Update quality parameters (Admin/Manager edit)
+router.put('/:id/quality-parameters', authenticateToken, async (req, res) => {
+  try {
+    const sampleEntryId = req.params.id;
+
+    // Get existing quality parameters for this entry
+    const existing = await QualityParametersService.getQualityParametersBySampleEntry(sampleEntryId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Quality parameters not found for this entry' });
+    }
+
+    // Prepare update data
+    const updates = {
+      sampleEntryId,
+      moisture: req.body.moisture !== undefined ? parseFloat(req.body.moisture) : existing.moisture,
+      cutting1: req.body.cutting1 !== undefined ? parseFloat(req.body.cutting1) : existing.cutting1,
+      cutting2: req.body.cutting2 !== undefined ? parseFloat(req.body.cutting2) : existing.cutting2,
+      bend: req.body.bend !== undefined ? parseFloat(req.body.bend) : existing.bend,
+      mixS: req.body.mixS !== undefined ? parseFloat(req.body.mixS) : existing.mixS,
+      mixL: req.body.mixL !== undefined ? parseFloat(req.body.mixL) : existing.mixL,
+      mix: req.body.mix !== undefined ? parseFloat(req.body.mix) : existing.mix,
+      kandu: req.body.kandu !== undefined ? parseFloat(req.body.kandu) : existing.kandu,
+      oil: req.body.oil !== undefined ? parseFloat(req.body.oil) : existing.oil,
+      sk: req.body.sk !== undefined ? parseFloat(req.body.sk) : existing.sk,
+      grainsCount: req.body.grainsCount !== undefined ? parseInt(req.body.grainsCount) : existing.grainsCount,
+      wbR: req.body.wbR !== undefined ? parseFloat(req.body.wbR) : existing.wbR,
+      wbBk: req.body.wbBk !== undefined ? parseFloat(req.body.wbBk) : existing.wbBk,
+      wbT: req.body.wbT !== undefined ? parseFloat(req.body.wbT) : existing.wbT,
+      paddyWb: req.body.paddyWb !== undefined ? parseFloat(req.body.paddyWb) : existing.paddyWb
+    };
+
+    const updated = await QualityParametersService.updateQualityParameters(
+      existing.id,
+      updates,
+      req.user.userId
+    );
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating quality parameters:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update physical inspection (Admin/Manager edit)
+router.put('/:id/physical-inspection/:inspectionId', authenticateToken, async (req, res) => {
+  try {
+    const { inspectionId } = req.params;
+
+    const updates = {};
+    if (req.body.inspectionDate !== undefined) updates.inspectionDate = req.body.inspectionDate;
+    if (req.body.lorryNumber !== undefined) updates.lorryNumber = req.body.lorryNumber;
+    if (req.body.bags !== undefined) updates.bags = parseInt(req.body.bags);
+    if (req.body.cutting1 !== undefined) updates.cutting1 = parseFloat(req.body.cutting1);
+    if (req.body.cutting2 !== undefined) updates.cutting2 = parseFloat(req.body.cutting2);
+    if (req.body.bend !== undefined) updates.bend = parseFloat(req.body.bend);
+    if (req.body.remarks !== undefined) updates.remarks = req.body.remarks;
+
+    const updated = await PhysicalInspectionService.updatePhysicalInspection(
+      inspectionId,
+      updates,
+      req.user.userId
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Physical inspection not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating physical inspection:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.post('/:id/lot-selection', authenticateToken, async (req, res) => {
   try {
     const { decision } = req.body; // 'PASS_WITHOUT_COOKING', 'PASS_WITH_COOKING', 'FAIL'
@@ -277,6 +351,66 @@ router.put('/:id/lot-allotment', authenticateToken, async (req, res) => {
     res.json(updated);
   } catch (error) {
     console.error('Error updating lot allotment:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Close lot (Manager - when party doesn't send all bags)
+router.post('/:id/close-lot', authenticateToken, async (req, res) => {
+  try {
+    const sampleEntryId = req.params.id;
+    const { reason } = req.body;
+
+    // Only manager/admin can close lots
+    if (!['manager', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only manager or admin can close lots' });
+    }
+
+    // Get existing lot allotment
+    const existingAllotment = await LotAllotmentService.getLotAllotmentBySampleEntry(sampleEntryId);
+    if (!existingAllotment) {
+      return res.status(404).json({ error: 'Lot allotment not found for this entry' });
+    }
+
+    // Get inspection progress to know how many bags were inspected
+    const progress = await PhysicalInspectionService.getInspectionProgress(sampleEntryId);
+    const inspectedBags = progress.inspectedBags || 0;
+
+    // Update lot allotment with close info
+    await LotAllotmentService.updateLotAllotment(
+      existingAllotment.id,
+      {
+        closedAt: new Date(),
+        closedByUserId: req.user.userId,
+        closedReason: reason || `Lot closed by manager. ${inspectedBags} of ${progress.totalBags} bags inspected. Party did not send remaining ${progress.remainingBags} bags.`,
+        inspectedBags: inspectedBags
+      },
+      req.user.userId
+    );
+
+    // Transition workflow to INVENTORY_ENTRY (skipping remaining bags)
+    await WorkflowEngine.transitionTo(
+      sampleEntryId,
+      'INVENTORY_ENTRY',
+      req.user.userId,
+      req.user.role,
+      {
+        closedByManager: true,
+        inspectedBags,
+        totalAllottedBags: progress.totalBags,
+        remainingBags: progress.remainingBags,
+        reason: reason || 'Party did not send remaining bags'
+      }
+    );
+
+    res.json({
+      message: 'Lot closed successfully',
+      inspectedBags,
+      totalBags: progress.totalBags,
+      remainingBags: progress.remainingBags
+    });
+  } catch (error) {
+    console.error('Error closing lot:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -432,6 +566,19 @@ router.post('/:id/manager-financial-calculation', authenticateToken, async (req,
 // Complete workflow (Final Review -> Completed) + Auto-create Arrival records
 router.post('/:id/complete', authenticateToken, async (req, res) => {
   try {
+    // CHECK: Get inspection progress to see if all bags are inspected
+    const progress = await PhysicalInspectionService.getInspectionProgress(req.params.id);
+    const remainingBags = progress.remainingBags || 0;
+    
+    if (remainingBags > 0) {
+      return res.status(400).json({ 
+        error: `Cannot complete this lot! There are still ${remainingBags} bags remaining to be inspected. Please have the Physical Supervisor add the remaining bags first.`,
+        remainingBags,
+        inspectedBags: progress.inspectedBags,
+        totalBags: progress.totalBags
+      });
+    }
+
     await WorkflowEngine.transitionTo(
       req.params.id, // Keep as UUID string
       'COMPLETED',
@@ -573,7 +720,7 @@ router.post('/:id/complete', authenticateToken, async (req, res) => {
 // Get sample entry ledger
 router.get('/ledger/all', authenticateToken, async (req, res) => {
   try {
-    const { startDate, endDate, broker, variety, party, location, status, limit } = req.query;
+    const { startDate, endDate, broker, variety, party, location, status, limit, page, pageSize } = req.query;
 
     const filters = {
       startDate: startDate ? new Date(startDate) : undefined,
@@ -583,7 +730,9 @@ router.get('/ledger/all', authenticateToken, async (req, res) => {
       party,
       location,
       status,
-      limit: limit ? parseInt(limit) : undefined
+      limit: limit ? parseInt(limit) : undefined,
+      page: page ? parseInt(page) : 1,
+      pageSize: pageSize ? parseInt(pageSize) : 100
     };
 
     const ledger = await SampleEntryService.getSampleEntryLedger(filters);

@@ -26,27 +26,27 @@ class AuditLogRepository {
    */
   async findByFilters(filters = {}) {
     const where = {};
-    
+
     if (filters.userId) where.userId = filters.userId;
     if (filters.tableName) where.tableName = filters.tableName;
     if (filters.recordId) where.recordId = filters.recordId;
     if (filters.actionType) where.actionType = filters.actionType;
-    
+
     if (filters.startDate || filters.endDate) {
       where.createdAt = {};
       if (filters.startDate) where.createdAt.$gte = filters.startDate;
       if (filters.endDate) where.createdAt.$lte = filters.endDate;
     }
-    
+
     const queryOptions = {
       where,
       limit: filters.limit || 100,
       offset: filters.offset || 0,
       order: [['createdAt', 'DESC']]
     };
-    
+
     const { count, rows } = await SampleEntryAuditLog.findAndCountAll(queryOptions);
-    
+
     return {
       logs: rows.map(log => log.toJSON()),
       total: count
