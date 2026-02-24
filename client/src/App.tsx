@@ -34,6 +34,7 @@ const OwnerFinancialPage = React.lazy(() => import('./pages/OwnerFinancialPage')
 const ManagerFinancialPage = React.lazy(() => import('./pages/ManagerFinancialPage'));
 const FinalReviewPage = React.lazy(() => import('./pages/FinalReviewPage'));
 const SampleWorkflow = React.lazy(() => import('./pages/SampleWorkflow'));
+const ManagerSampleReports = React.lazy(() => import('./pages/ManagerSampleReports'));
 
 // Lightweight loading spinner for page transitions
 const PageLoader = () => (
@@ -187,7 +188,7 @@ const AppContent: React.FC = () => {
             <Route
               path="/sample-entry-ledger"
               element={
-                <ProtectedRoute roles={['manager', 'admin']}>
+                <ProtectedRoute>
                   <Layout>
                     <SampleEntryLedger />
                   </Layout>
@@ -200,6 +201,16 @@ const AppContent: React.FC = () => {
                 <ProtectedRoute roles={['admin']}>
                   <Layout>
                     <OwnerSampleReports />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/manager-sample-reports"
+              element={
+                <ProtectedRoute roles={['manager', 'admin']}>
+                  <Layout>
+                    <ManagerSampleReports />
                   </Layout>
                 </ProtectedRoute>
               }

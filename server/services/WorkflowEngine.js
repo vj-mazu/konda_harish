@@ -13,6 +13,14 @@ const InventoryData = require('../models/InventoryData');
 
 // Define all valid workflow transitions
 const WORKFLOW_TRANSITIONS = [
+  // Staff can move entry to QUALITY_CHECK (without quality params) - just sends to quality supervisor
+  {
+    fromStatus: 'STAFF_ENTRY',
+    toStatus: 'QUALITY_CHECK',
+    allowedRoles: ['staff', 'quality_supervisor'],
+    requiredData: []
+  },
+  // Quality Supervisor adds quality params and moves to next step
   {
     fromStatus: 'STAFF_ENTRY',
     toStatus: 'QUALITY_CHECK',
@@ -76,13 +84,13 @@ const WORKFLOW_TRANSITIONS = [
   {
     fromStatus: 'FINAL_REPORT',
     toStatus: 'LOT_ALLOTMENT',
-    allowedRoles: ['manager'],
+    allowedRoles: ['admin', 'manager', 'owner'],
     requiredData: ['offeringPrice']
   },
   {
     fromStatus: 'LOT_ALLOTMENT',
     toStatus: 'PHYSICAL_INSPECTION',
-    allowedRoles: ['physical_supervisor'],
+    allowedRoles: ['physical_supervisor', 'manager', 'admin'],
     requiredData: ['lotAllotment']
   },
   {

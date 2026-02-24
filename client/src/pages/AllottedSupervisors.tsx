@@ -60,16 +60,17 @@ const AllottedSupervisors: React.FC = () => {
   const [expandedEntries, setExpandedEntries] = useState<{ [key: string]: boolean }>({});
   const [closingEntryId, setClosingEntryId] = useState<string | null>(null);
   const [closeLotReason, setCloseLotReason] = useState('');
-  
+  const [offeringCache, setOfferingCache] = useState<{ [key: string]: any }>({});
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
   const [totalEntries, setTotalEntries] = useState(0);
-  
+
   // Filter options (for dropdowns)
   const [brokerOptions, setBrokerOptions] = useState<string[]>([]);
   const [varietyOptions, setVarietyOptions] = useState<string[]>([]);
-  
+
   // Filters
   const [filters, setFilters] = useState({
     startDate: '',
@@ -79,12 +80,12 @@ const AllottedSupervisors: React.FC = () => {
     party: '',
     status: ''
   });
-  
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1); // Reset to first page on filter change
   };
-  
+
   const clearFilters = () => {
     setFilters({
       startDate: '',
@@ -182,7 +183,7 @@ const AllottedSupervisors: React.FC = () => {
         allMap.set(entry.id, entry);
       });
       let allEntries = Array.from(allMap.values());
-      
+
       // Extract unique broker and variety options for dropdowns
       const brokerSet = new Set(allEntries.map((e: any) => e.brokerName).filter(Boolean));
       const varietySet = new Set(allEntries.map((e: any) => e.variety).filter(Boolean));
@@ -190,10 +191,10 @@ const AllottedSupervisors: React.FC = () => {
       const varieties = Array.from(varietySet).sort();
       setBrokerOptions(brokers);
       setVarietyOptions(varieties);
-      
+
       // Apply filters
       allEntries = applyFilters(allEntries);
-      
+
       // Apply pagination
       const startIndex = (currentPage - 1) * pageSize;
       const paginatedEntries = allEntries.slice(startIndex, startIndex + pageSize);
@@ -207,6 +208,18 @@ const AllottedSupervisors: React.FC = () => {
         }
       });
       setSelectedSupervisors(preSelected);
+
+      // Load offering data for each entry
+      const offerCache: { [key: string]: any } = {};
+      for (const entry of allEntries) {
+        try {
+          const offerRes = await axios.get(`${API_URL}/sample-entries/${entry.id}/offering-data`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (offerRes.data) offerCache[entry.id] = offerRes.data;
+        } catch { /* skip */ }
+      }
+      setOfferingCache(offerCache);
 
       // Load inspection progress for each entry
       for (const entry of allEntries) {
@@ -362,9 +375,9 @@ const AllottedSupervisors: React.FC = () => {
         borderRadius: '8px',
         marginBottom: '15px'
       }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           marginBottom: '10px'
         }}>
@@ -384,9 +397,9 @@ const AllottedSupervisors: React.FC = () => {
             Clear All
           </button>
         </div>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(6, 1fr)', 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(6, 1fr)',
           gap: '10px',
           alignItems: 'end'
         }}>
@@ -477,7 +490,9 @@ const AllottedSupervisors: React.FC = () => {
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '70px' }}>Variety</th>
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '90px' }}>Party</th>
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'left', width: '70px' }}>Location</th>
-              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '60px' }}>Total</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'center', width: '60px' }}>Hamali</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'center', width: '60px' }}>Bkrg</th>
+              <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'center', width: '50px' }}>LF</th>
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '60px' }}>Allotted</th>
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '60px' }}>Inspected</th>
               <th style={{ border: '1px solid #357abd', padding: '8px', fontWeight: '600', fontSize: '11px', textAlign: 'right', width: '60px' }}>Remaining</th>
@@ -489,9 +504,9 @@ const AllottedSupervisors: React.FC = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={13} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</td></tr>
+              <tr><td colSpan={15} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</td></tr>
             ) : entries.length === 0 ? (
-              <tr><td colSpan={13} style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No allotted supervisors found</td></tr>
+              <tr><td colSpan={15} style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No allotted supervisors found</td></tr>
             ) : (
               entries.map((entry, index) => {
                 const currentSupervisor = entry.lotAllotment?.supervisor;
@@ -499,7 +514,7 @@ const AllottedSupervisors: React.FC = () => {
                 const progress = inspectionProgress[entry.id];
                 const progressPercentage = progress?.progressPercentage || 0;
                 const hasPreviousInspections = progress && progress.previousInspections && progress.previousInspections.length > 0;
-                
+
                 // Check if this is a new lot (different from previous)
                 const prevEntry = entries[index - 1];
                 const isNewLot = !prevEntry || prevEntry.id !== entry.id;
@@ -509,15 +524,15 @@ const AllottedSupervisors: React.FC = () => {
                     {/* Add visual gap between different lots */}
                     {isNewLot && index > 0 && (
                       <tr>
-                        <td colSpan={13} style={{ 
-                          height: '15px', 
+                        <td colSpan={15} style={{
+                          height: '15px',
                           backgroundColor: '#e0e0e0',
                           borderLeft: '3px solid #4a90e2',
                           borderRight: '3px solid #4a90e2'
                         }}>
-                          <div style={{ 
-                            fontSize: '10px', 
-                            color: '#666', 
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#666',
                             padding: '0 10px',
                             fontWeight: '600'
                           }}>
@@ -539,7 +554,25 @@ const AllottedSupervisors: React.FC = () => {
                       <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.variety}</td>
                       <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.partyName}</td>
                       <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', textAlign: 'left' }}>{entry.location}</td>
-                      <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px' }}>{entry.bags}</td>
+                      {/* Financial details columns */}
+                      {(() => {
+                        const o = offeringCache[entry.id];
+                        const missing = { color: '#e74c3c', fontWeight: '600', fontSize: '10px' };
+                        const set = { fontSize: '11px' };
+                        return (
+                          <>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
+                              {o?.hamaliPerKg || o?.hamali ? <span style={set}>{o.hamaliPerKg || o.hamali}</span> : <span style={missing}>⚠️</span>}
+                            </td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
+                              {o?.brokerage ? <span style={set}>{o.brokerage}</span> : <span style={missing}>⚠️</span>}
+                            </td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
+                              {o?.lf ? <span style={set}>{o.lf}</span> : <span style={missing}>⚠️</span>}
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px', fontWeight: '600', color: '#10b981' }}>
                         {entry.lotAllotment?.allottedBags || entry.bags}
                       </td>
@@ -710,7 +743,7 @@ const AllottedSupervisors: React.FC = () => {
                     {/* Expandable inspection details */}
                     {expandedEntries[entry.id] && hasPreviousInspections && (
                       <tr>
-                        <td colSpan={13} style={{ padding: '10px', backgroundColor: '#f0f8ff', border: '1px solid #ddd' }}>
+                        <td colSpan={15} style={{ padding: '10px', backgroundColor: '#f0f8ff', border: '1px solid #ddd' }}>
                           <div style={{ fontSize: '11px', fontWeight: '600', marginBottom: '5px', color: '#333' }}>
                             📋 Inspection Trips ({progress.previousInspections.length}) — {progress.inspectedBags} of {progress.totalBags} bags inspected
                           </div>

@@ -16,6 +16,7 @@ const PhysicalInspection = require('./PhysicalInspection');
 const InventoryData = require('./InventoryData');
 const FinancialCalculation = require('./FinancialCalculation');
 const SampleEntryAuditLog = require('./SampleEntryAuditLog');
+const SampleEntryOffering = require('./SampleEntryOffering');
 const Broker = require('./Broker');
 const Arrival = require('./Arrival');
 const BalanceAuditTrail = require('./BalanceAuditTrail');
@@ -49,6 +50,7 @@ const models = {
   FinancialCalculation,
   SampleEntryAuditLog,
   Broker,
+  SampleEntryOffering,
   Arrival,
   BalanceAuditTrail,
   ByProduct,

@@ -65,9 +65,25 @@ const SampleEntry = sequelize.define('SampleEntry', {
     field: 'lorry_number'
   },
   entryType: {
-    type: DataTypes.ENUM('CREATE_NEW', 'DIRECT_LOADED_VEHICLE'),
+    type: DataTypes.ENUM('CREATE_NEW', 'DIRECT_LOADED_VEHICLE', 'NEW_PADDY_SAMPLE', 'READY_LORRY', 'LOCATION_SAMPLE'),
     allowNull: false,
     field: 'entry_type'
+  },
+  packaging: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    defaultValue: '75'
+  },
+  sampleCollectedBy: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    field: 'sample_collected_by'
+  },
+  sampleGivenToOffice: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+    field: 'sample_given_to_office'
   },
   workflowStatus: {
     type: DataTypes.ENUM(
@@ -137,7 +153,8 @@ const SampleEntry = sequelize.define('SampleEntry', {
     { fields: ['entry_date'] },
     { fields: ['broker_name'] },
     { fields: ['variety'] },
-    { fields: ['lot_selection_decision'] }
+    { fields: ['lot_selection_decision'] },
+    { fields: ['workflow_status', 'entry_date'] }
   ]
 });
 
@@ -166,6 +183,11 @@ SampleEntry.associate = (models) => {
   SampleEntry.hasOne(models.LotAllotment, {
     foreignKey: 'sampleEntryId',
     as: 'lotAllotment'
+  });
+
+  SampleEntry.hasOne(models.SampleEntryOffering, {
+    foreignKey: 'sampleEntryId',
+    as: 'offering'
   });
 };
 

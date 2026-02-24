@@ -10,6 +10,51 @@ const InventoryDataService = require('../services/InventoryDataService');
 const FinancialCalculationService = require('../services/FinancialCalculationService');
 const WorkflowEngine = require('../services/WorkflowEngine');
 const FileUploadService = require('../services/FileUploadService');
+const SampleEntry = require('../models/SampleEntry');
+const QualityParameters = require('../models/QualityParameters');
+const SampleEntryOffering = require('../models/SampleEntryOffering');
+const CookingReport = require('../models/CookingReport');
+const User = require('../models/User');
+const { Op } = require('sequelize');
+
+// Staff-only: Move entry to QUALITY_CHECK without adding quality parameters
+router.post('/:id/send-to-quality', authenticateToken, async (req, res) => {
+  try {
+    const entryId = req.params.id;
+
+    // Only staff can use this endpoint
+    if (req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Only staff can use this endpoint' });
+    }
+
+    // Get the entry to verify it exists
+    const SampleEntry = require('../models/SampleEntry');
+    const entry = await SampleEntry.findByPk(entryId);
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Sample entry not found' });
+    }
+
+    // Check current status
+    if (entry.workflowStatus !== 'STAFF_ENTRY') {
+      return res.status(400).json({ error: 'Entry is not in STAFF_ENTRY status' });
+    }
+
+    // Transition to QUALITY_CHECK
+    await WorkflowEngine.transitionTo(
+      entryId,
+      'QUALITY_CHECK',
+      req.user.userId,
+      req.user.role,
+      { sentByStaff: true }
+    );
+
+    res.json({ message: 'Entry sent to Quality Supervisor successfully' });
+  } catch (error) {
+    console.error('Error sending to quality:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
 
 // Create sample entry (Staff)
 router.post('/', authenticateToken, async (req, res) => {
@@ -25,7 +70,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // Get sample entries by role
 router.get('/by-role', authenticateToken, async (req, res) => {
   try {
-    const { status, startDate, endDate, broker, variety, party, location, limit, offset } = req.query;
+    const { status, startDate, endDate, broker, variety, party, location, page, pageSize } = req.query;
 
     const filters = {
       status,
@@ -35,14 +80,121 @@ router.get('/by-role', authenticateToken, async (req, res) => {
       variety,
       party,
       location,
-      limit: limit ? parseInt(limit) : undefined,
-      offset: offset ? parseInt(offset) : undefined
+      page: page ? parseInt(page) : 1,
+      pageSize: pageSize ? parseInt(pageSize) : 50
     };
 
     const result = await SampleEntryService.getSampleEntriesByRole(req.user.role, filters, req.user.userId);
     res.json(result);
   } catch (error) {
     console.error('Error getting sample entries:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── TAB ROUTES (MUST be before /:id to avoid route shadowing) ───
+
+// ─── Loading Lots (passed lots in processing) ───
+router.get('/tabs/loading-lots', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, pageSize = 50, broker, variety, party, location, startDate, endDate } = req.query;
+
+    const where = {
+      workflowStatus: {
+        [Op.in]: ['LOT_ALLOTMENT', 'PHYSICAL_INSPECTION', 'INVENTORY_ENTRY', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW']
+      }
+    };
+    if (broker) where.brokerName = { [Op.iLike]: `%${broker}%` };
+    if (variety) where.variety = { [Op.iLike]: `%${variety}%` };
+    if (party) where.partyName = { [Op.iLike]: `%${party}%` };
+    if (location) where.location = { [Op.iLike]: `%${location}%` };
+    if (startDate && endDate) where.entryDate = { [Op.between]: [startDate, endDate] };
+
+    const { count, rows } = await SampleEntry.findAndCountAll({
+      where,
+      attributes: ['id', 'entryDate', 'brokerName', 'variety', 'partyName', 'location', 'bags', 'packaging', 'workflowStatus', 'createdAt'],
+      include: [
+        { model: SampleEntryOffering, as: 'offering' },
+        { model: User, as: 'creator', attributes: ['id', 'username'] }
+      ],
+      order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
+      limit: parseInt(pageSize),
+      offset: (parseInt(page) - 1) * parseInt(pageSize),
+      subQuery: false
+    });
+
+    res.json({ entries: rows, total: count, page: parseInt(page), pageSize: parseInt(pageSize) });
+  } catch (error) {
+    console.error('Error getting loading lots:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Completed Lots (patti not yet added) ───
+router.get('/tabs/completed-lots', authenticateToken, async (req, res) => {
+  try {
+
+    const { page = 1, pageSize = 50, broker, variety, party, location, startDate, endDate } = req.query;
+
+    const where = { workflowStatus: 'COMPLETED' };
+    if (broker) where.brokerName = { [Op.iLike]: `%${broker}%` };
+    if (variety) where.variety = { [Op.iLike]: `%${variety}%` };
+    if (party) where.partyName = { [Op.iLike]: `%${party}%` };
+    if (location) where.location = { [Op.iLike]: `%${location}%` };
+    if (startDate && endDate) where.entryDate = { [Op.between]: [startDate, endDate] };
+
+    const { count, rows } = await SampleEntry.findAndCountAll({
+      where,
+      include: [
+        { model: QualityParameters, as: 'qualityParameters' },
+        { model: SampleEntryOffering, as: 'offering' },
+        { model: User, as: 'creator', attributes: ['id', 'username'] }
+      ],
+      order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
+      limit: parseInt(pageSize),
+      offset: (parseInt(page) - 1) * parseInt(pageSize)
+    });
+
+    res.json({ entries: rows, total: count, page: parseInt(page), pageSize: parseInt(pageSize) });
+  } catch (error) {
+    console.error('Error getting completed lots:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Sample Book (all entries from lot selection onwards) ───
+router.get('/tabs/sample-book', authenticateToken, async (req, res) => {
+  try {
+
+    const { page = 1, pageSize = 50, broker, variety, party, location, startDate, endDate } = req.query;
+
+    const where = {
+      workflowStatus: {
+        [Op.notIn]: ['STAFF_ENTRY']
+      }
+    };
+    if (broker) where.brokerName = { [Op.iLike]: `%${broker}%` };
+    if (variety) where.variety = { [Op.iLike]: `%${variety}%` };
+    if (party) where.partyName = { [Op.iLike]: `%${party}%` };
+    if (location) where.location = { [Op.iLike]: `%${location}%` };
+    if (startDate && endDate) where.entryDate = { [Op.between]: [startDate, endDate] };
+
+    const { count, rows } = await SampleEntry.findAndCountAll({
+      where,
+      include: [
+        { model: QualityParameters, as: 'qualityParameters' },
+        { model: CookingReport, as: 'cookingReport' },
+        { model: SampleEntryOffering, as: 'offering' },
+        { model: User, as: 'creator', attributes: ['id', 'username'] }
+      ],
+      order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
+      limit: parseInt(pageSize),
+      offset: (parseInt(page) - 1) * parseInt(pageSize)
+    });
+
+    res.json({ entries: rows, total: count, page: parseInt(page), pageSize: parseInt(pageSize) });
+  } catch (error) {
+    console.error('Error getting sample book:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -105,25 +257,44 @@ router.post('/:id/quality-parameters', authenticateToken, async (req, res) => {
       }
 
       try {
-        // Convert string values from FormData to numbers
+        // Helper function to safely parse float - returns 0 for empty/invalid values
+        const parseFloatSafe = (value) => {
+          if (value === undefined || value === null || value === '') return 0;
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
+        // Helper function to safely parse int - returns 0 for empty/invalid values
+        const parseIntSafe = (value) => {
+          if (value === undefined || value === null || value === '') return 0;
+          const parsed = parseInt(value);
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
+        // Convert string values from FormData to numbers (with safe parsing)
         const qualityData = {
-          sampleEntryId: req.params.id, // Keep as UUID string, don't parse
-          moisture: parseFloat(req.body.moisture),
-          cutting1: parseFloat(req.body.cutting1),
-          cutting2: parseFloat(req.body.cutting2),
-          bend: parseFloat(req.body.bend),
-          mixS: parseFloat(req.body.mixS),
-          mixL: parseFloat(req.body.mixL),
-          mix: parseFloat(req.body.mix),
-          kandu: parseFloat(req.body.kandu),
-          oil: parseFloat(req.body.oil),
-          sk: parseFloat(req.body.sk),
-          grainsCount: parseInt(req.body.grainsCount),
-          wbR: parseFloat(req.body.wbR),
-          wbBk: parseFloat(req.body.wbBk),
-          wbT: parseFloat(req.body.wbT),
-          paddyWb: parseFloat(req.body.paddyWb),
-          reportedBy: req.body.reportedBy
+          sampleEntryId: req.params.id,
+          moisture: parseFloatSafe(req.body.moisture),
+          cutting1: parseFloatSafe(req.body.cutting1),
+          cutting2: parseFloatSafe(req.body.cutting2),
+          bend: parseFloatSafe(req.body.bend || req.body.bend1), // Support both bend and bend1
+          bend1: parseFloatSafe(req.body.bend1),
+          bend2: parseFloatSafe(req.body.bend2),
+          mixS: parseFloatSafe(req.body.mixS),
+          mixL: parseFloatSafe(req.body.mixL),
+          mix: parseFloatSafe(req.body.mix),
+          kandu: parseFloatSafe(req.body.kandu),
+          oil: parseFloatSafe(req.body.oil),
+          sk: parseFloatSafe(req.body.sk),
+          grainsCount: parseIntSafe(req.body.grainsCount),
+          wbR: parseFloatSafe(req.body.wbR),
+          wbBk: parseFloatSafe(req.body.wbBk),
+          wbT: parseFloatSafe(req.body.wbT),
+          paddyWb: parseFloatSafe(req.body.paddyWb),
+          reportedBy: req.body.reportedBy || 'Quality Supervisor',
+          smixEnabled: !!(req.body.mixS && parseFloat(req.body.mixS) > 0),
+          lmixEnabled: !!(req.body.mixL && parseFloat(req.body.mixL) > 0),
+          paddyWbEnabled: !!(req.body.paddyWb && parseFloat(req.body.paddyWb) > 0)
         };
 
         // Handle photo upload if present
@@ -299,6 +470,119 @@ router.post('/:id/offering-price', authenticateToken, async (req, res) => {
     res.json(entry);
   } catch (error) {
     console.error('Error updating offering price:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Set final price (Admin sets toggles, Manager fills values)
+router.post('/:id/final-price', authenticateToken, async (req, res) => {
+  try {
+    console.log(`[FINAL-PRICE] ===== START =====`);
+    console.log(`[FINAL-PRICE] Entry ID: ${req.params.id}`);
+    console.log(`[FINAL-PRICE] User role: ${req.user.role}, userId: ${req.user.userId}`);
+    console.log(`[FINAL-PRICE] isFinalized: ${req.body.isFinalized}`);
+    console.log(`[FINAL-PRICE] finalPrice: ${req.body.finalPrice}`);
+
+    const result = await SampleEntryService.setFinalPrice(
+      req.params.id,
+      req.body,
+      req.user.userId,
+      req.user.role
+    );
+
+    console.log(`[FINAL-PRICE] setFinalPrice succeeded. isFinalized in body: ${req.body.isFinalized}`);
+
+    // After updating the final price, ALWAYS check if we can transition to LOT_ALLOTMENT
+    if (req.body.isFinalized) {
+      try {
+        const entry = await SampleEntryService.getSampleEntryById(req.params.id);
+        console.log(`[FINAL-PRICE] Entry found: ${!!entry}, workflowStatus: ${entry ? entry.workflowStatus : 'N/A'}`);
+
+        if (entry && entry.workflowStatus === 'FINAL_REPORT') {
+          console.log(`[FINAL-PRICE] Transitioning ${req.params.id} to LOT_ALLOTMENT (Loading Lots) (Triggered by ${req.user.role})`);
+          await WorkflowEngine.transitionTo(
+            req.params.id,
+            'LOT_ALLOTMENT',
+            req.user.userId,
+            req.user.role,
+            { finalPriceSet: true }
+          );
+          console.log(`[FINAL-PRICE] ✅ Transition to LOT_ALLOTMENT (Loading Lots) SUCCEEDED!`);
+        } else {
+          console.log(`[FINAL-PRICE] ⚠️ Skipped transition - entry status is: ${entry ? entry.workflowStatus : 'NOT FOUND'}`);
+        }
+      } catch (transitionError) {
+        console.error(`[FINAL-PRICE] ❌ Transition FAILED:`, transitionError.message);
+      }
+    } else {
+      console.log(`[FINAL-PRICE] ⚠️ isFinalized is false/undefined - no transition attempted`);
+    }
+
+    console.log(`[FINAL-PRICE] ===== END =====`);
+    res.json(result);
+  } catch (error) {
+    console.error('[FINAL-PRICE] ❌ FATAL ERROR:', error.message);
+    console.error('[FINAL-PRICE] Stack:', error.stack);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Transition workflow status (Manager can move lot to next stage)
+router.post('/:id/transition', authenticateToken, async (req, res) => {
+  try {
+    const { toStatus } = req.body;
+    if (!toStatus) {
+      return res.status(400).json({ error: 'toStatus is required' });
+    }
+
+    const result = await WorkflowEngine.transitionTo(
+      req.params.id,
+      toStatus,
+      req.user.userId,
+      req.user.role,
+      {}
+    );
+
+    res.json({ success: true, message: `Transitioned to ${toStatus}`, result });
+  } catch (error) {
+    console.error('[TRANSITION] Error:', error.message);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Batch get offering data for multiple entries (for performance)
+router.get('/offering-data-batch', authenticateToken, async (req, res) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids parameter is required' });
+    }
+
+    const idList = ids.split(',');
+    const offerings = await SampleEntryOffering.findAll({
+      where: { sampleEntryId: idList }
+    });
+
+    // Convert to map
+    const result = {};
+    offerings.forEach(o => {
+      result[o.sampleEntryId] = o;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error batch fetching offering data:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get offering data for auto-population in final price modal
+router.get('/:id/offering-data', authenticateToken, async (req, res) => {
+  try {
+    const offering = await SampleEntryService.getOfferingData(req.params.id);
+    res.json(offering || {});
+  } catch (error) {
+    console.error('Error fetching offering data:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -569,9 +853,9 @@ router.post('/:id/complete', authenticateToken, async (req, res) => {
     // CHECK: Get inspection progress to see if all bags are inspected
     const progress = await PhysicalInspectionService.getInspectionProgress(req.params.id);
     const remainingBags = progress.remainingBags || 0;
-    
+
     if (remainingBags > 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Cannot complete this lot! There are still ${remainingBags} bags remaining to be inspected. Please have the Physical Supervisor add the remaining bags first.`,
         remainingBags,
         inspectedBags: progress.inspectedBags,
@@ -753,5 +1037,4 @@ router.get('/:id/inspection-progress', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 module.exports = router;

@@ -41,12 +41,13 @@ class CookingReportService {
 
       // Transition workflow based on status
       let nextStatus;
-      if (reportData.status === 'PASS') {
+      if (reportData.status === 'PASS' || reportData.status === 'MEDIUM') {
+        // PASS and MEDIUM both move to FINAL_REPORT
         nextStatus = 'FINAL_REPORT';
       } else if (reportData.status === 'FAIL') {
         nextStatus = 'FAILED';
       } else {
-        // RECHECK or MEDIUM - stay in COOKING_REPORT
+        // RECHECK - stay in COOKING_REPORT
         return report;
       }
 

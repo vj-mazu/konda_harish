@@ -39,6 +39,18 @@ const CookingReport = sequelize.define('CookingReport', {
   remarks: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  recheckCount: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0,
+    field: 'recheck_count'
+  },
+  hasRemarks: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+    field: 'has_remarks'
   }
 }, {
   tableName: 'cooking_reports',
@@ -54,7 +66,7 @@ CookingReport.associate = (models) => {
     foreignKey: 'sampleEntryId',
     as: 'sampleEntry'
   });
-  
+
   CookingReport.belongsTo(models.User, {
     foreignKey: 'reviewedByUserId',
     as: 'reviewedBy'

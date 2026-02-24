@@ -305,7 +305,7 @@ const Navbar: React.FC = () => {
     '/sample-entry', '/sample-entry-ledger', '/sample-workflow',
     '/inventory-entry', '/owner-financial', '/manager-financial',
     '/final-review', '/owner-sample-reports', '/allotting-supervisors',
-    '/physical-inspection', '/pending-approvals'
+    '/physical-inspection', '/pending-approvals', '/loading-lots'
   ];
   const ledgersPaths = ['/ledger', '/rice-ledger', '/sample-entry-ledger', '/hamali-book'];
 
@@ -322,10 +322,25 @@ const Navbar: React.FC = () => {
         <MobileOverlay $open={mobileMenuOpen} onClick={() => setMobileMenuOpen(false)} />
         <NavLinks $mobileOpen={mobileMenuOpen}>
           <NavLink to="/dashboard" $active={isActive('/dashboard')}>Dashboard</NavLink>
-          <NavLink to="/arrivals" $active={isActive('/arrivals')}>Arrivals</NavLink>
-          <NavLink to="/records" $active={isActive('/records')}>Records</NavLink>
+          {user && user.role === 'staff' && (
+            <NavLink to="/sample-entry" $active={isActive('/sample-entry')}>Sample Entry</NavLink>
+          )}
+          {user && user.role === 'manager' && (
+            <>
+              <NavLink to="/manager-sample-reports" $active={isActive('/manager-sample-reports')}>Loading Lots</NavLink>
+              <NavLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Sample Book</NavLink>
+            </>
+          )}
+          {user && user.role === 'admin' && (
+            <>
+              <NavLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Sample Reports</NavLink>
+              <NavLink to="/arrivals" $active={isActive('/arrivals')}>Arrivals</NavLink>
+              <NavLink to="/records" $active={isActive('/records')}>Records</NavLink>
+            </>
+          )}
 
-          {/* Ledgers Dropdown */}
+          {/* Ledgers Dropdown - for Manager and Admin */}
+          {(user?.role === 'manager' || user?.role === 'admin') && (
           <DropdownWrapper ref={ledgersRef}>
             <DropdownTrigger
               $active={isLedgersActive}
@@ -336,14 +351,25 @@ const Navbar: React.FC = () => {
             >Ledgers ▾</DropdownTrigger>
             {ledgersDropdownOpen && (
               <DropdownMenu>
+                <DropdownLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Sample Book</DropdownLink>
+                {user?.role === 'admin' && (
+                  <DropdownLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Sample Reports</DropdownLink>
+                )}
                 <DropdownLink to="/ledger" $active={isActive('/ledger')}>Kunchinittu Ledger</DropdownLink>
                 <DropdownLink to="/rice-ledger" $active={isActive('/rice-ledger')}>Rice Ledger</DropdownLink>
-                <DropdownLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Sample Ledger</DropdownLink>
                 <DropdownLink to="/hamali-book" $active={isActive('/hamali-book')}>Hamali Book</DropdownLink>
               </DropdownMenu>
             )}
           </DropdownWrapper>
+          )}
 
+          {/* Show Arrivals/Records for staff too */}
+          {user?.role === 'staff' && (
+            <>
+              <NavLink to="/arrivals" $active={isActive('/arrivals')}>Arrivals</NavLink>
+              <NavLink to="/records" $active={isActive('/records')}>Records</NavLink>
+            </>
+          )}
           <NavLink to="/hamali" $active={isActive('/hamali')}>Hamali</NavLink>
 
           {/* Workflow Dropdown */}
@@ -363,7 +389,7 @@ const Navbar: React.FC = () => {
               </DropdownTrigger>
               {workflowDropdownOpen && (
                 <DropdownMenu>
-                  <DropdownLink to="/sample-entry" $active={isActive('/sample-entry')}>Sample Entry</DropdownLink>
+                  <DropdownLink to="/sample-entry" $active={isActive('/sample-entry')}>New Paddy Sample</DropdownLink>
                   {(user.role === 'manager' || user.role === 'admin') && (
                     <>
                       <DropdownLink to="/sample-workflow" $active={isActive('/sample-workflow')}>Workflow Board</DropdownLink>
@@ -372,7 +398,7 @@ const Navbar: React.FC = () => {
                       </DropdownLink>
                     </>
                   )}
-                  <DropdownDivider />
+                  {user.role !== 'staff' && <DropdownDivider />}
                   {(user.role === 'inventory_staff' || user.role === 'admin') && (
                     <DropdownLink to="/inventory-entry" $active={isActive('/inventory-entry')}>Inventory Entry</DropdownLink>
                   )}
@@ -384,8 +410,9 @@ const Navbar: React.FC = () => {
                   )}
                   {(user.role === 'manager' || user.role === 'admin') && (
                     <>
-                      {user.role === 'manager' && (
-                        <DropdownLink to="/allotting-supervisors" $active={isActive('/allotting-supervisors')}>Allotting Supervisors</DropdownLink>
+                      <DropdownDivider />
+                      {user.role === 'admin' && (
+                        <DropdownLink to="/manager-sample-reports" $active={isActive('/manager-sample-reports')}>Manager Sample Reports</DropdownLink>
                       )}
                       <DropdownLink to="/manager-financial" $active={isActive('/manager-financial')}>Manager Financial</DropdownLink>
                       <DropdownLink to="/final-review" $active={isActive('/final-review')}>Final Review</DropdownLink>
@@ -394,7 +421,7 @@ const Navbar: React.FC = () => {
                   {user.role === 'admin' && (
                     <>
                       <DropdownDivider />
-                      <DropdownLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Reports</DropdownLink>
+                      <DropdownLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Sample Reports</DropdownLink>
                     </>
                   )}
                 </DropdownMenu>

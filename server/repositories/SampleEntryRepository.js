@@ -1,5 +1,6 @@
 const { SampleEntry, User, QualityParameters, CookingReport, LotAllotment, PhysicalInspection, InventoryData, FinancialCalculation, Kunchinittu, Outturn } = require('../models');
 const { Variety } = require('../models/Location');
+const SampleEntryOffering = require('../models/SampleEntryOffering');
 const { Op } = require('sequelize');
 
 class SampleEntryRepository {
@@ -49,7 +50,7 @@ class SampleEntryRepository {
   async findByStatus(status, options = {}) {
     const queryOptions = {
       where: { workflowStatus: status },
-      limit: options.limit || 100,
+      limit: options.limit || 50,
       offset: options.offset || 0,
       order: [[options.orderBy || 'createdAt', options.orderDir || 'DESC']]
     };
@@ -58,19 +59,126 @@ class SampleEntryRepository {
     return entries.map(entry => entry.toJSON());
   }
 
+  /**
+   * Build role-appropriate includes to avoid unnecessary JOINs
+   * PERFORMANCE: Only load deep associations when the workflow status actually needs them
+   */
+  _buildIncludesForRole(role, status) {
+    // Core includes - always lightweight
+    const baseIncludes = [
+      { model: User, as: 'creator', attributes: ['id', 'username'] }
+    ];
+
+    // Staff only needs their own entries - no associations
+    if (role === 'staff') {
+      return baseIncludes;
+    }
+
+    // Quality supervisor needs quality parameters
+    if (role === 'quality_supervisor') {
+      return [
+        ...baseIncludes,
+        {
+          model: QualityParameters, as: 'qualityParameters', required: false,
+          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+        }
+      ];
+    }
+
+    // Admin/Manager: include depth depends on the filtered status
+    const lightStatuses = ['STAFF_ENTRY', 'QUALITY_CHECK', 'LOT_SELECTION', 'COOKING_REPORT', 'FINAL_REPORT'];
+    const isLightQuery = status && lightStatuses.includes(status);
+
+    if (isLightQuery) {
+      const includes = [
+        ...baseIncludes,
+        {
+          model: QualityParameters, as: 'qualityParameters', required: false,
+          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+        },
+        { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] }
+      ];
+
+      // Add cooking report for COOKING_REPORT status
+      if (status === 'COOKING_REPORT' || status === 'FINAL_REPORT') {
+        includes.push({ model: CookingReport, as: 'cookingReport', required: false });
+      }
+
+      // Add offering for FINAL_REPORT
+      if (status === 'FINAL_REPORT') {
+        includes.push({ model: SampleEntryOffering, as: 'offering', required: false });
+      }
+
+      return includes;
+    }
+
+    // Full depth for LOT_ALLOTMENT, PHYSICAL_INSPECTION, INVENTORY_ENTRY, etc.
+    return this._buildFullIncludes(role);
+  }
+
+  /**
+   * Full depth includes for deep workflow statuses
+   */
+  _buildFullIncludes(role, userId) {
+    return [
+      { model: User, as: 'creator', attributes: ['id', 'username'] },
+      {
+        model: QualityParameters, as: 'qualityParameters', required: false,
+        include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+      },
+      { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
+      { model: CookingReport, as: 'cookingReport', required: false },
+      {
+        model: LotAllotment,
+        as: 'lotAllotment',
+        required: role === 'physical_supervisor',
+        where: (role === 'physical_supervisor' && userId) ? { allottedToSupervisorId: userId } : undefined,
+        include: [
+          { model: User, as: 'supervisor', attributes: ['id', 'username'] },
+          {
+            model: PhysicalInspection,
+            as: 'physicalInspections',
+            required: false,
+            include: [
+              { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
+              {
+                model: InventoryData,
+                as: 'inventoryData',
+                required: false,
+                include: [
+                  { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
+                  {
+                    model: FinancialCalculation,
+                    as: 'financialCalculation',
+                    required: false,
+                    include: [
+                      { model: User, as: 'owner', attributes: ['id', 'username'] },
+                      { model: User, as: 'manager', attributes: ['id', 'username'] }
+                    ]
+                  },
+                  { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                  { model: Outturn, as: 'outturn', required: false }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ];
+  }
+
   async findByRoleAndFilters(role, filters = {}, userId) {
     const where = {};
 
     // Role-based filtering
-    // FIX: inventory_staff can now see more statuses for second time inventory entries
     const roleStatusMap = {
-      staff: ['STAFF_ENTRY'],
+      staff: null, // Allow Staff to see all of their past and completed entries
       quality_supervisor: ['STAFF_ENTRY', 'QUALITY_CHECK'],
       owner: null,
       admin: null,
       manager: ['QUALITY_CHECK', 'LOT_SELECTION', 'COOKING_REPORT', 'FINAL_REPORT', 'LOT_ALLOTMENT', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'],
       physical_supervisor: ['LOT_ALLOTMENT', 'PHYSICAL_INSPECTION'],
-      inventory_staff: ['PHYSICAL_INSPECTION', 'INVENTORY_ENTRY', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'], // FIX: See entries for second time inventory too
+      inventory_staff: ['PHYSICAL_INSPECTION', 'INVENTORY_ENTRY', 'OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW'],
       financial_account: ['OWNER_FINANCIAL', 'MANAGER_FINANCIAL', 'FINAL_REVIEW']
     };
 
@@ -86,75 +194,61 @@ class SampleEntryRepository {
       if (filters.endDate) where.entryDate[Op.lte] = filters.endDate;
     }
 
-    if (filters.broker) where.brokerName = { [Op.like]: `%${filters.broker}%` };
-    if (filters.variety) where.variety = { [Op.like]: `%${filters.variety}%` };
-    if (filters.party) where.partyName = { [Op.like]: `%${filters.party}%` };
-    if (filters.location) where.location = { [Op.like]: `%${filters.location}%` };
+    // PERFORMANCE: Use exact match for dropdown-driven filters (broker, variety)
+    // Only use LIKE for free-text party/location search
+    if (filters.broker) where.brokerName = filters.broker;
+    if (filters.variety) where.variety = filters.variety;
+    if (filters.party) where.partyName = { [Op.iLike]: `%${filters.party}%` };
+    if (filters.location) where.location = { [Op.iLike]: `%${filters.location}%` };
+
+    // PERFORMANCE: Build role-appropriate includes (avoids unnecessary JOINs)
+    const activeStatus = filters.status || (roleStatusMap[role] && roleStatusMap[role].length === 1 ? roleStatusMap[role][0] : null);
+    const include = this._buildIncludesForRole(role, activeStatus);
+
+    // Fix includes for physical_supervisor userId filtering
+    if (role === 'physical_supervisor' && userId) {
+      const lotAllotmentInclude = include.find(i => i.as === 'lotAllotment');
+      if (lotAllotmentInclude) {
+        lotAllotmentInclude.where = { allottedToSupervisorId: userId };
+        lotAllotmentInclude.required = true;
+      }
+    }
+
+    // Pagination
+    const page = filters.page || 1;
+    const pageSize = filters.pageSize || 50;
+    const offset = (page - 1) * pageSize;
 
     const queryOptions = {
       where,
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'username'] },
-        {
-          model: QualityParameters,
-          as: 'qualityParameters',
-          required: false,
-          include: [
-            { model: User, as: 'reportedByUser', attributes: ['id', 'username'] }
-          ]
-        },
-        { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
-        { model: CookingReport, as: 'cookingReport', required: false },
-        {
-          model: LotAllotment,
-          as: 'lotAllotment',
-          required: role === 'physical_supervisor',
-          where: (role === 'physical_supervisor' && userId) ? { allottedToSupervisorId: userId } : undefined,
-          include: [
-            { model: User, as: 'supervisor', attributes: ['id', 'username'] },
-            {
-              model: PhysicalInspection,
-              as: 'physicalInspections',
-              required: false,
-              include: [
-                { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
-                {
-                  model: InventoryData,
-                  as: 'inventoryData',
-                  required: false,
-                  include: [
-                    { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
-                    {
-                      model: FinancialCalculation,
-                      as: 'financialCalculation',
-                      required: false,
-                      include: [
-                        { model: User, as: 'owner', attributes: ['id', 'username'] },
-                        { model: User, as: 'manager', attributes: ['id', 'username'] }
-                      ]
-                    },
-                    { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
-                    { model: Outturn, as: 'outturn', required: false }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      limit: filters.limit || 500,
-      offset: filters.offset || 0,
-      order: [['createdAt', 'DESC']],
+      include,
+      limit: pageSize,
+      offset,
+      order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
       distinct: true,
       subQuery: false
     };
 
-    const { count, rows } = await SampleEntry.findAndCountAll(queryOptions);
-
-    return {
-      entries: rows.map(entry => entry.toJSON()),
-      total: count
-    };
+    // PERFORMANCE: Only count on first page to avoid expensive COUNT on large tables
+    if (page === 1) {
+      const { count, rows } = await SampleEntry.findAndCountAll(queryOptions);
+      return {
+        entries: rows.map(entry => entry.toJSON()),
+        total: count,
+        page,
+        pageSize,
+        totalPages: Math.ceil(count / pageSize)
+      };
+    } else {
+      const rows = await SampleEntry.findAll(queryOptions);
+      return {
+        entries: rows.map(entry => entry.toJSON()),
+        total: null, // Frontend should cache total from page 1
+        page,
+        pageSize,
+        totalPages: null
+      };
+    }
   }
 
   async update(id, updates) {
@@ -173,78 +267,124 @@ class SampleEntryRepository {
       if (filters.startDate) where.entryDate[Op.gte] = filters.startDate;
       if (filters.endDate) where.entryDate[Op.lte] = filters.endDate;
     }
-    if (filters.broker) where.brokerName = { [Op.like]: `%${filters.broker}%` };
-    if (filters.variety) where.variety = { [Op.like]: `%${filters.variety}%` };
-    if (filters.party) where.partyName = { [Op.like]: `%${filters.party}%` };
-    if (filters.location) where.location = { [Op.like]: `%${filters.location}%` };
+    if (filters.broker) where.brokerName = filters.broker;
+    if (filters.variety) where.variety = filters.variety;
+    if (filters.party) where.partyName = { [Op.iLike]: `%${filters.party}%` };
+    if (filters.location) where.location = { [Op.iLike]: `%${filters.location}%` };
     if (filters.status) where.workflowStatus = filters.status;
 
     const page = filters.page || 1;
-    const pageSize = filters.pageSize || 100;
+    const pageSize = filters.pageSize || 50;
     const offset = (page - 1) * pageSize;
 
-    const { count, rows } = await SampleEntry.findAndCountAll({
-      where,
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'username'] },
-        {
-          model: QualityParameters,
-          as: 'qualityParameters',
-          required: false,
-          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
-        },
-        { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
-        { model: CookingReport, as: 'cookingReport', required: false },
-        {
-          model: LotAllotment,
-          as: 'lotAllotment',
-          required: false,
-          include: [
-            { model: User, as: 'supervisor', attributes: ['id', 'username'] },
-            {
-              model: PhysicalInspection,
-              as: 'physicalInspections',
-              required: false,
-              include: [
-                { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
-                {
-                  model: InventoryData,
-                  as: 'inventoryData',
-                  required: false,
-                  include: [
-                    { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
-                    {
-                      model: FinancialCalculation,
-                      as: 'financialCalculation',
-                      required: false,
-                      include: [
-                        { model: User, as: 'owner', attributes: ['id', 'username'] },
-                        { model: User, as: 'manager', attributes: ['id', 'username'] }
-                      ]
-                    },
-                    { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
-                    { model: Outturn, as: 'outturn', required: false }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
-      limit: pageSize,
-      offset,
-      distinct: true,
-      subQuery: false
-    });
+    // PERFORMANCE: Only count on first page
+    if (page === 1) {
+      const { count, rows } = await SampleEntry.findAndCountAll({
+        where,
+        include: [
+          { model: User, as: 'creator', attributes: ['id', 'username'] },
+          {
+            model: QualityParameters, as: 'qualityParameters', required: false,
+            include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+          },
+          { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
+          { model: CookingReport, as: 'cookingReport', required: false },
+          {
+            model: LotAllotment, as: 'lotAllotment', required: false,
+            include: [
+              { model: User, as: 'supervisor', attributes: ['id', 'username'] },
+              {
+                model: PhysicalInspection, as: 'physicalInspections', required: false,
+                include: [
+                  { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
+                  {
+                    model: InventoryData, as: 'inventoryData', required: false,
+                    include: [
+                      { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
+                      {
+                        model: FinancialCalculation, as: 'financialCalculation', required: false,
+                        include: [
+                          { model: User, as: 'owner', attributes: ['id', 'username'] },
+                          { model: User, as: 'manager', attributes: ['id', 'username'] }
+                        ]
+                      },
+                      { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                      { model: Outturn, as: 'outturn', required: false }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
+        limit: pageSize,
+        offset,
+        distinct: true,
+        subQuery: false
+      });
 
-    return {
-      entries: rows.map(entry => entry.toJSON()),
-      total: count,
-      page,
-      pageSize,
-      totalPages: Math.ceil(count / pageSize)
-    };
+      return {
+        entries: rows.map(entry => entry.toJSON()),
+        total: count,
+        page,
+        pageSize,
+        totalPages: Math.ceil(count / pageSize)
+      };
+    } else {
+      const rows = await SampleEntry.findAll({
+        where,
+        include: [
+          { model: User, as: 'creator', attributes: ['id', 'username'] },
+          {
+            model: QualityParameters, as: 'qualityParameters', required: false,
+            include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+          },
+          { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
+          { model: CookingReport, as: 'cookingReport', required: false },
+          {
+            model: LotAllotment, as: 'lotAllotment', required: false,
+            include: [
+              { model: User, as: 'supervisor', attributes: ['id', 'username'] },
+              {
+                model: PhysicalInspection, as: 'physicalInspections', required: false,
+                include: [
+                  { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
+                  {
+                    model: InventoryData, as: 'inventoryData', required: false,
+                    include: [
+                      { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
+                      {
+                        model: FinancialCalculation, as: 'financialCalculation', required: false,
+                        include: [
+                          { model: User, as: 'owner', attributes: ['id', 'username'] },
+                          { model: User, as: 'manager', attributes: ['id', 'username'] }
+                        ]
+                      },
+                      { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
+                      { model: Outturn, as: 'outturn', required: false }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        order: [['entryDate', 'DESC'], ['createdAt', 'DESC']],
+        limit: pageSize,
+        offset,
+        distinct: true,
+        subQuery: false
+      });
+
+      return {
+        entries: rows.map(entry => entry.toJSON()),
+        total: null,
+        page,
+        pageSize,
+        totalPages: null
+      };
+    }
   }
 }
 

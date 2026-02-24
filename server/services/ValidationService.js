@@ -204,7 +204,12 @@ class ValidationService {
    * @returns {Object} Validation result
    */
   validateSampleEntry(entryData) {
-    const requiredFields = ['entryDate', 'brokerName', 'variety', 'partyName', 'location', 'bags'];
+    let requiredFields = ['entryDate', 'brokerName', 'variety', 'location', 'bags'];
+
+    // partyName is required for all except DIRECT_LOADED_VEHICLE (Ready Lorry)
+    if (entryData.entryType !== 'DIRECT_LOADED_VEHICLE') {
+      requiredFields.push('partyName');
+    }
 
     const requiredValidation = this.validateRequiredFields(entryData, requiredFields);
     if (!requiredValidation.valid) {
@@ -224,7 +229,7 @@ class ValidationService {
     }
 
     // Validate entry type if provided
-    if (entryData.entryType && !['CREATE_NEW', 'DIRECT_LOADED_VEHICLE'].includes(entryData.entryType)) {
+    if (entryData.entryType && !['CREATE_NEW', 'DIRECT_LOADED_VEHICLE', 'NEW_PADDY_SAMPLE', 'READY_LORRY', 'LOCATION_SAMPLE'].includes(entryData.entryType)) {
       errors.push('Invalid entry type');
     }
 

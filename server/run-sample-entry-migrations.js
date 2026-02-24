@@ -105,6 +105,70 @@ async function runMigrations() {
       console.error('❌ Migration 82 error:', error.message);
     }
 
+    // Migration 86: Add offering price fields
+    console.log('📋 Migration 86: Adding offering price to sample entries...');
+    try {
+      const addOfferingPrice = require('./migrations/86_add_offering_price_to_sample_entries');
+      await addOfferingPrice.up();
+      console.log('✅ Migration 86: Offering price added');
+    } catch (error) {
+      console.error('❌ Migration 86 error:', error.message);
+    }
+
+    // Migration 89: Add lot selection fields
+    console.log('📋 Migration 89: Adding lot selection fields...');
+    try {
+      const addLotSelection = require('./migrations/89_add_lot_selection_fields');
+      await addLotSelection.up();
+    } catch (error) {
+      console.error('❌ Migration 89 error:', error.message);
+    }
+
+    // Migration 92: Add close lot fields
+    console.log('📋 Migration 92: Adding close lot fields...');
+    try {
+      const addCloseLot = require('./migrations/92_add_close_lot_fields');
+      await addCloseLot.up();
+    } catch (error) {
+      console.error('❌ Migration 92 error:', error.message);
+    }
+
+    // Migration 95: Sample workflow enhancements
+    console.log('📋 Migration 95: Adding workflow enhancements...');
+    try {
+      const addWorkflowEnhancements = require('./migrations/95_add_sample_workflow_enhancements');
+      await addWorkflowEnhancements.up();
+    } catch (error) {
+      console.error('❌ Migration 95 error:', error.message);
+    }
+
+    // Migration 96: Performance indexes enhancements
+    console.log('📋 Migration 96: Adding sample entry performance indexes...');
+    try {
+      const addPerformanceIndexes = require('./migrations/96_add_sample_entry_performance_indexes');
+      await addPerformanceIndexes.up();
+    } catch (error) {
+      console.error('❌ Migration 96 error:', error.message);
+    }
+
+    // Migration 97: Comprehensive Pricing
+    console.log('📋 Migration 97: Offering Final Price fields...');
+    try {
+      const offeringFinalPrice = require('./migrations/97_add_offering_final_price_fields');
+      await offeringFinalPrice.up(sequelize.getQueryInterface(), sequelize.Sequelize);
+    } catch (error) {
+      console.error('❌ Migration 97 error:', error.message);
+    }
+
+    // Migration 98: Manager Fallback Toggles
+    console.log('📋 Migration 98: Manager Fallback Toggles...');
+    try {
+      const managerFallback = require('./migrations/98_add_manager_fallback_toggles');
+      await managerFallback.up(sequelize.getQueryInterface(), sequelize.Sequelize);
+    } catch (error) {
+      console.error('❌ Migration 98 error:', error.message);
+    }
+
     // Verify roles in database
     console.log('📋 Verifying user roles in database...');
     try {
@@ -116,7 +180,7 @@ async function runMigrations() {
         )
         ORDER BY enumlabel;
       `);
-      
+
       console.log('✅ Available roles in database:');
       roles.forEach(role => console.log(`   - ${role.enumlabel}`));
       console.log('');
@@ -134,7 +198,7 @@ async function runMigrations() {
         AND table_name LIKE '%sample%' OR table_name LIKE '%quality%' OR table_name LIKE '%cooking%' OR table_name LIKE '%lot%' OR table_name LIKE '%inspection%' OR table_name LIKE '%inventory%' OR table_name LIKE '%financial%'
         ORDER BY table_name;
       `);
-      
+
       console.log('✅ Sample Entry related tables:');
       tables.forEach(table => console.log(`   - ${table.table_name}`));
       console.log('');
@@ -144,7 +208,7 @@ async function runMigrations() {
 
     console.log('✅ All migrations completed!\n');
     console.log('🎉 Sample Entry workflow is ready to use!\n');
-    
+
     process.exit(0);
   } catch (error) {
     console.error('❌ Migration script error:', error);

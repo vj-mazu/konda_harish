@@ -1,6 +1,7 @@
 const SampleEntryRepository = require('../repositories/SampleEntryRepository');
 const ValidationService = require('./ValidationService');
 const AuditService = require('./AuditService');
+const SampleEntryOffering = require('../models/SampleEntryOffering');
 
 class SampleEntryService {
   /**
@@ -116,29 +117,139 @@ class SampleEntryService {
   }
 
   /**
-   * Update offering price
-   * @param {number} id - Sample entry ID
-   * @param {Object} priceData - Price data
-   * @param {number} priceData.offeringPrice - Offering price
-   * @param {string} priceData.priceType - Price type (BAGS or LOOSE)
-   * @param {number} priceData.finalPrice - Final price (optional)
-   * @param {string} priceData.remarks - Remarks
+   * Update offering price — saves all offering fields to SampleEntryOffering table
+   * @param {string} id - Sample entry ID (UUID)
+   * @param {Object} priceData - All offering price data
    * @param {number} userId - User ID
-   * @returns {Promise<Object>} Updated entry
+   * @returns {Promise<Object>} Updated offering record
    */
   async updateOfferingPrice(id, priceData, userId) {
-    const updates = {
-      offeringPrice: priceData.offeringPrice,
+    // Update the simple fields on SampleEntry for backward compatibility
+    const sampleEntryUpdates = {
+      offeringPrice: priceData.offerRate || priceData.offeringPrice,
       priceType: priceData.priceType,
       offeringRemarks: priceData.remarks
     };
+    await this.updateSampleEntry(id, sampleEntryUpdates, userId);
 
-    // Add finalPrice if provided
-    if (priceData.finalPrice !== null && priceData.finalPrice !== undefined) {
-      updates.finalPrice = priceData.finalPrice;
+    // Save detailed offering to SampleEntryOffering table
+    const offeringData = {
+      sampleEntryId: id,
+      offerRate: priceData.offerRate || priceData.offeringPrice,
+      sute: priceData.sute || 0,
+      suteUnit: priceData.suteUnit || priceData.suit || 'per_kg',
+      baseRateType: priceData.baseRateType || priceData.offerBaseRate,
+      baseRateUnit: priceData.baseRateUnit || priceData.perUnit || 'per_bag',
+      offerBaseRateValue: priceData.offerBaseRateValue || 0,
+      hamaliEnabled: priceData.hamaliEnabled !== undefined ? priceData.hamaliEnabled : (priceData.hamali === true),
+      hamali: priceData.hamaliValue || priceData.hamali || 0,
+      hamaliPerKg: priceData.hamaliPerKg || 0,
+      hamaliPerQuintal: priceData.hamaliPerQuintal || 0,
+      hamaliUnit: priceData.hamaliUnit || priceData.baseRateUnit || 'per_bag',
+      moistureValue: priceData.moistureValue || priceData.moisture || 0,
+      brokerage: priceData.brokerageValue || priceData.brokerage || 0,
+      brokerageEnabled: priceData.brokerageEnabled || false,
+      brokerageUnit: priceData.brokerageUnit || priceData.baseRateUnit || 'per_bag',
+      lf: priceData.lfValue || priceData.lf || 0,
+      lfEnabled: priceData.lfEnabled || false,
+      lfUnit: priceData.lfUnit || priceData.baseRateUnit || 'per_bag',
+      egbValue: priceData.egbValue || priceData.egb || 0,
+      customDivisor: priceData.customDivisor || null,
+      createdBy: userId,
+      updatedBy: userId
+    };
+
+    // Find existing or create new
+    let offering = await SampleEntryOffering.findOne({
+      where: { sampleEntryId: id }
+    });
+
+    if (offering) {
+      await offering.update(offeringData);
+    } else {
+      offering = await SampleEntryOffering.create(offeringData);
     }
 
-    return await this.updateSampleEntry(id, updates, userId);
+    return offering;
+  }
+
+  /**
+   * Set final price — separate from offering price
+   * Admin sets hamali/brokerage yes/no toggles, manager fills values
+   * @param {string} id - Sample entry ID (UUID)
+   * @param {Object} finalData - Final price data
+   * @param {number} userId - User ID
+   * @param {string} userRole - User role (admin/manager)
+   * @returns {Promise<Object>} Updated offering record
+   */
+  async setFinalPrice(id, finalData, userId, userRole) {
+    let offering = await SampleEntryOffering.findOne({
+      where: { sampleEntryId: id }
+    });
+
+    if (!offering) {
+      throw new Error('Offering price must be set before adding final price');
+    }
+
+    const updates = { updatedBy: userId };
+
+    if (userRole === 'admin' || userRole === 'owner') {
+      // Admin sets toggles and can set final price
+      if (finalData.hamaliEnabled !== undefined) updates.hamaliEnabled = finalData.hamaliEnabled;
+      if (finalData.brokerageEnabled !== undefined) updates.brokerageEnabled = finalData.brokerageEnabled;
+      if (finalData.lfEnabled !== undefined) updates.lfEnabled = finalData.lfEnabled;
+      if (finalData.suteEnabled !== undefined) updates.suteEnabled = finalData.suteEnabled;
+      if (finalData.moistureEnabled !== undefined) updates.moistureEnabled = finalData.moistureEnabled;
+      if (finalData.finalPrice !== undefined) updates.finalPrice = finalData.finalPrice;
+      if (finalData.finalBaseRate !== undefined) updates.finalBaseRate = finalData.finalBaseRate;
+      if (finalData.finalSute !== undefined) updates.finalSute = finalData.finalSute;
+      if (finalData.finalSuteUnit !== undefined) updates.finalSuteUnit = finalData.finalSuteUnit;
+      // Admin editable values based on toggles
+      if (finalData.hamali !== undefined) updates.hamali = finalData.hamali;
+      if (finalData.hamaliUnit !== undefined) updates.hamaliUnit = finalData.hamaliUnit;
+      if (finalData.brokerage !== undefined) updates.brokerage = finalData.brokerage;
+      if (finalData.brokerageUnit !== undefined) updates.brokerageUnit = finalData.brokerageUnit;
+      if (finalData.lf !== undefined) updates.lf = finalData.lf;
+      if (finalData.lfUnit !== undefined) updates.lfUnit = finalData.lfUnit;
+      if (finalData.moistureValue !== undefined) updates.moistureValue = finalData.moistureValue;
+      if (finalData.egbValue !== undefined) updates.egbValue = finalData.egbValue;
+      if (finalData.customDivisor !== undefined) updates.customDivisor = finalData.customDivisor;
+      if (finalData.isFinalized !== undefined) updates.isFinalized = finalData.isFinalized;
+    }
+
+    if (userRole === 'manager') {
+      // Manager fills fallback gap values
+      if (finalData.hamali !== undefined) updates.hamali = finalData.hamali;
+      if (finalData.hamaliUnit !== undefined) updates.hamaliUnit = finalData.hamaliUnit;
+      if (finalData.brokerage !== undefined) updates.brokerage = finalData.brokerage;
+      if (finalData.brokerageUnit !== undefined) updates.brokerageUnit = finalData.brokerageUnit;
+      if (finalData.lf !== undefined) updates.lf = finalData.lf;
+      if (finalData.lfUnit !== undefined) updates.lfUnit = finalData.lfUnit;
+      if (finalData.finalPrice !== undefined) updates.finalPrice = finalData.finalPrice;
+      if (finalData.finalSute !== undefined) updates.finalSute = finalData.finalSute;
+      if (finalData.finalSuteUnit !== undefined) updates.finalSuteUnit = finalData.finalSuteUnit;
+      if (finalData.moistureValue !== undefined) updates.moistureValue = finalData.moistureValue;
+    }
+
+    await offering.update(updates);
+
+    // Also update final price on SampleEntry
+    if (updates.finalPrice !== undefined) {
+      await this.updateSampleEntry(id, { finalPrice: updates.finalPrice }, userId);
+    }
+
+    return offering;
+  }
+
+  /**
+   * Get offering data for a sample entry
+   * @param {string} id - Sample entry ID (UUID)
+   * @returns {Promise<Object|null>} Offering data or null
+   */
+  async getOfferingData(id) {
+    return await SampleEntryOffering.findOne({
+      where: { sampleEntryId: id }
+    });
   }
 }
 

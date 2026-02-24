@@ -274,7 +274,7 @@ const InfoBox = styled.div`
 interface User {
     id: number;
     username: string;
-    role: 'staff' | 'manager' | 'admin' | 'quality_supervisor' | 'physical_supervisor' | 'inventory_staff' | 'financial_account';
+    role: 'owner' | 'staff' | 'manager' | 'admin' | 'quality_supervisor' | 'physical_supervisor' | 'inventory_staff' | 'financial_account';
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -386,6 +386,7 @@ const EditModal: React.FC<EditModalProps> = ({ user, mode, onClose, onSave }) =>
                         <FormGroup>
                             <Label>Role *</Label>
                             <Select value={role} onChange={e => setRole(e.target.value)}>
+                                <option value="owner">Owner</option>
                                 <option value="staff">Staff</option>
                                 <option value="manager">Manager</option>
                                 <option value="admin">Admin</option>
@@ -553,6 +554,7 @@ const UserManagement: React.FC = () => {
                                         disabled={user.id === currentUser?.id}
                                         style={{ padding: '0.4rem', borderRadius: '6px', fontSize: '0.85rem' }}
                                     >
+                                        <option value="owner">Owner</option>
                                         <option value="staff">Staff</option>
                                         <option value="manager">Manager</option>
                                         <option value="admin">Admin</option>

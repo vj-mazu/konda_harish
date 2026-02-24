@@ -17,7 +17,29 @@ const SampleEntryPage: React.FC = () => {
   const [entries, setEntries] = useState<SampleEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasExistingQualityData, setHasExistingQualityData] = useState(false);
-  
+  const [activeTab, setActiveTab] = useState<'MILL_SAMPLE' | 'LOCATION_SAMPLE' | 'SAMPLE_BOOK'>('SAMPLE_BOOK');
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showQualitySaveConfirm, setShowQualitySaveConfirm] = useState(false);
+  const [pendingSubmitEvent, setPendingSubmitEvent] = useState<React.FormEvent | null>(null);
+  const [editingEntry, setEditingEntry] = useState<SampleEntry | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [smixEnabled, setSmixEnabled] = useState(false);
+  const [lmixEnabled, setLmixEnabled] = useState(false);
+  const [paddyWbEnabled, setPaddyWbEnabled] = useState(false);
+  const [wbEnabled, setWbEnabled] = useState(false);
+
+  // Filters
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterBroker, setFilterBroker] = useState('');
+  const [filtersVisible, setFiltersVisible] = useState(false);
+
+  // Server-side Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const PAGE_SIZE = 50;
+
   // Dropdown options
   const [brokers, setBrokers] = useState<string[]>([]);
   const [varieties, setVarieties] = useState<string[]>([]);
@@ -29,15 +51,21 @@ const SampleEntryPage: React.FC = () => {
     partyName: '',
     location: '',
     bags: '',
-    lorryNumber: ''
+    lorryNumber: '',
+    packaging: '75',
+    sampleCollectedBy: '',
+    sampleGivenToOffice: false
   });
 
-  // Quality parameters form
+  // Quality parameters form — cutting & bend use single-column format: e.g. "32×24"
   const [qualityData, setQualityData] = useState({
     moisture: '',
+    cutting: '', // single column: "32×24"
     cutting1: '',
     cutting2: '',
-    bend: '',
+    bend: '', // single column: "12×8"
+    bend1: '',
+    bend2: '',
     mixS: '',
     mixL: '',
     mix: '',
@@ -52,21 +80,74 @@ const SampleEntryPage: React.FC = () => {
     uploadFile: null as File | null
   });
 
+  // Auto-insert × symbol for cutting/bend after 2+ digits
+  const handleCuttingInput = (value: string) => {
+    // Allow digits and × only
+    const clean = value.replace(/[^0-9×x]/g, '').replace(/[xX]/g, '×');
+    setQualityData(prev => {
+      // Auto-insert × after first number if not present
+      const parts = clean.split('×');
+      const first = parts[0] || '';
+      const second = parts[1] || '';
+      // Auto-add × after 2 digits if user hasn't typed it
+      if (first.length >= 2 && !clean.includes('×') && value.length > (prev.cutting || '').length) {
+        return { ...prev, cutting: first + '×', cutting1: first, cutting2: '' };
+      }
+      return { ...prev, cutting: clean, cutting1: first, cutting2: second };
+    });
+  };
+
+  const handleBendInput = (value: string) => {
+    const clean = value.replace(/[^0-9×x]/g, '').replace(/[xX]/g, '×');
+    setQualityData(prev => {
+      const parts = clean.split('×');
+      const first = parts[0] || '';
+      const second = parts[1] || '';
+      if (first.length >= 2 && !clean.includes('×') && value.length > (prev.bend || '').length) {
+        return { ...prev, bend: first + '×', bend1: first, bend2: '' };
+      }
+      return { ...prev, bend: clean, bend1: first, bend2: second };
+    });
+  };
+
+  useEffect(() => {
+    const wbR = wbEnabled ? (parseFloat(qualityData.wbR) || 0) : 0;
+    const wbBk = wbEnabled ? (parseFloat(qualityData.wbBk) || 0) : 0;
+    const wbT = (wbR + wbBk).toFixed(2);
+    if (qualityData.wbT !== wbT && !hasExistingQualityData) {
+      setQualityData(prev => ({ ...prev, wbT }));
+    }
+  }, [qualityData.wbR, qualityData.wbBk, wbEnabled]);
+
   useEffect(() => {
     loadEntries();
     loadDropdownData();
-  }, []);
+  }, [page]);
 
   const loadEntries = async () => {
     try {
       setLoading(true);
-      const response = await sampleEntryApi.getSampleEntriesByRole({});
-      setEntries(response.data.entries);
+      const params: any = { page, pageSize: PAGE_SIZE };
+      if (filterDateFrom) params.startDate = filterDateFrom;
+      if (filterDateTo) params.endDate = filterDateTo;
+      if (filterBroker) params.broker = filterBroker;
+      const response = await sampleEntryApi.getSampleEntriesByRole(params);
+      const data = response.data as any;
+      setEntries(data.entries);
+      if (data.total != null) {
+        setTotalEntries(data.total);
+        setTotalPages(data.totalPages || Math.ceil(data.total / PAGE_SIZE));
+      }
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to load entries', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApplyFilters = () => {
+    setPage(1);
+    loadEntries();
   };
 
   const loadDropdownData = async () => {
@@ -88,10 +169,16 @@ const SampleEntryPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Show save confirmation before actually saving
+  const handleSubmitWithConfirm = (e: React.FormEvent) => {
     e.preventDefault();
+    setPendingSubmitEvent(e);
+    setShowSaveConfirm(true);
+  };
+
+  const handleSubmit = async () => {
+    setShowSaveConfirm(false);
     try {
-      // Ensure user is authenticated
       if (!user || !user.id) {
         showNotification('User not authenticated', 'error');
         return;
@@ -105,8 +192,10 @@ const SampleEntryPage: React.FC = () => {
         location: formData.location.toUpperCase(),
         bags: parseInt(formData.bags),
         lorryNumber: formData.lorryNumber ? formData.lorryNumber.toUpperCase() : undefined,
-        entryType
-        // Note: createdByUserId is set by the backend from the auth token
+        entryType,
+        packaging: formData.packaging as '75' | '40',
+        sampleCollectedBy: formData.sampleCollectedBy ? formData.sampleCollectedBy.toUpperCase() : undefined,
+        sampleGivenToOffice: formData.sampleGivenToOffice
       });
       showNotification('Sample entry created successfully', 'success');
       setShowModal(false);
@@ -117,11 +206,58 @@ const SampleEntryPage: React.FC = () => {
         partyName: '',
         location: '',
         bags: '',
-        lorryNumber: ''
+        lorryNumber: '',
+        packaging: '75',
+        sampleCollectedBy: entryType === 'LOCATION_SAMPLE' ? (user?.username || '') : '', // Reset to user name only for location sample
+        sampleGivenToOffice: false
       });
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to create entry', 'error');
+    }
+  };
+
+  // Open edit modal for a staff entry
+  const handleEditEntry = (entry: SampleEntry) => {
+    setEditingEntry(entry);
+    setFormData({
+      entryDate: entry.entryDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+      brokerName: entry.brokerName || '',
+      variety: entry.variety || '',
+      partyName: entry.partyName || '',
+      location: entry.location || '',
+      bags: entry.bags?.toString() || '',
+      lorryNumber: entry.lorryNumber || '',
+      packaging: (entry as any).packaging || '75',
+      sampleCollectedBy: (entry as any).sampleCollectedBy || '',
+      sampleGivenToOffice: (entry as any).sampleGivenToOffice || false
+    });
+    setEntryType(entry.entryType);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingEntry) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_URL}/sample-entries/${editingEntry.id}`, {
+        entryDate: formData.entryDate,
+        brokerName: formData.brokerName.toUpperCase(),
+        variety: formData.variety.toUpperCase(),
+        partyName: formData.partyName.toUpperCase(),
+        location: formData.location.toUpperCase(),
+        bags: parseInt(formData.bags),
+        lorryNumber: formData.lorryNumber ? formData.lorryNumber.toUpperCase() : null,
+        packaging: formData.packaging,
+        sampleCollectedBy: formData.sampleCollectedBy ? formData.sampleCollectedBy.toUpperCase() : null,
+        sampleGivenToOffice: formData.sampleGivenToOffice
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      showNotification('Entry updated successfully', 'success');
+      setShowEditModal(false);
+      setEditingEntry(null);
+      loadEntries();
+    } catch (error: any) {
+      showNotification(error.response?.data?.error || 'Failed to update entry', 'error');
     }
   };
 
@@ -133,7 +269,7 @@ const SampleEntryPage: React.FC = () => {
   const handleViewEntry = (entry: SampleEntry) => {
     setSelectedEntry(entry);
     setShowQualityModal(true);
-    
+
     // Fetch existing quality parameters if they exist
     const fetchQualityParameters = async () => {
       try {
@@ -142,18 +278,25 @@ const SampleEntryPage: React.FC = () => {
           `${API_URL}/sample-entries/${entry.id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        
+
         console.log('Sample entry response:', response.data);
-        
+
         // If quality parameters exist, populate the form with saved data
         if (response.data.qualityParameters) {
           console.log('Quality parameters found:', response.data.qualityParameters);
           const qp = response.data.qualityParameters;
+          const c1 = qp.cutting1?.toString() || '';
+          const c2 = qp.cutting2?.toString() || '';
+          const b1 = qp.bend1?.toString() || '';
+          const b2 = qp.bend2?.toString() || '';
           setQualityData({
             moisture: qp.moisture?.toString() || '',
-            cutting1: qp.cutting1?.toString() || '',
-            cutting2: qp.cutting2?.toString() || '',
-            bend: qp.bend?.toString() || '',
+            cutting: c1 && c2 ? `${c1}×${c2}` : c1 || '',
+            cutting1: c1,
+            cutting2: c2,
+            bend: b1 && b2 ? `${b1}×${b2}` : b1 || '',
+            bend1: b1,
+            bend2: b2,
             mixS: qp.mixS?.toString() || '',
             mixL: qp.mixL?.toString() || '',
             mix: qp.mix?.toString() || '',
@@ -168,13 +311,22 @@ const SampleEntryPage: React.FC = () => {
             uploadFile: null
           });
           setHasExistingQualityData(true);
+          // Auto-enable toggles based on existing data
+          if (qp.mixS && parseFloat(qp.mixS) > 0) setSmixEnabled(true);
+          if (qp.mixL && parseFloat(qp.mixL) > 0) setLmixEnabled(true);
+          if (qp.paddyWb && parseFloat(qp.paddyWb) > 0) setPaddyWbEnabled(true);
+          if (qp.wbR && parseFloat(qp.wbR) > 0) setWbEnabled(true);
+          if (qp.wbBk && parseFloat(qp.wbBk) > 0) setWbEnabled(true);
         } else {
           // Reset quality data for new entry
           setQualityData({
             moisture: '',
+            cutting: '',
             cutting1: '',
             cutting2: '',
             bend: '',
+            bend1: '',
+            bend2: '',
             mixS: '',
             mixL: '',
             mix: '',
@@ -195,9 +347,12 @@ const SampleEntryPage: React.FC = () => {
         // Reset on error
         setQualityData({
           moisture: '',
+          cutting: '',
           cutting1: '',
           cutting2: '',
           bend: '',
+          bend1: '',
+          bend2: '',
           mixS: '',
           mixL: '',
           mix: '',
@@ -214,12 +369,17 @@ const SampleEntryPage: React.FC = () => {
         setHasExistingQualityData(false);
       }
     };
-    
+
     fetchQualityParameters();
   };
 
-  const handleSubmitQualityParameters = async (e: React.FormEvent) => {
+  const handleSubmitQualityParametersWithConfirm = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowQualitySaveConfirm(true);
+  };
+
+  const handleSubmitQualityParameters = async () => {
+    setShowQualitySaveConfirm(false);
     if (!selectedEntry) return;
 
     try {
@@ -227,21 +387,22 @@ const SampleEntryPage: React.FC = () => {
       formData.append('moisture', qualityData.moisture);
       formData.append('cutting1', qualityData.cutting1);
       formData.append('cutting2', qualityData.cutting2);
-      formData.append('bend', qualityData.bend);
-      formData.append('mixS', qualityData.mixS);
-      formData.append('mixL', qualityData.mixL);
+      formData.append('bend1', qualityData.bend1);
+      formData.append('bend2', qualityData.bend2);
+      formData.append('mixS', smixEnabled ? qualityData.mixS || '0' : '0');
+      formData.append('mixL', lmixEnabled ? qualityData.mixL || '0' : '0');
       formData.append('mix', qualityData.mix);
       formData.append('kandu', qualityData.kandu);
       formData.append('oil', qualityData.oil);
       formData.append('sk', qualityData.sk);
       formData.append('grainsCount', qualityData.grainsCount);
-      formData.append('wbR', qualityData.wbR);
-      formData.append('wbBk', qualityData.wbBk);
-      formData.append('wbT', qualityData.wbT);
-      formData.append('paddyWb', qualityData.paddyWb);
+      formData.append('wbR', wbEnabled ? qualityData.wbR || '0' : '0');
+      formData.append('wbBk', wbEnabled ? qualityData.wbBk || '0' : '0');
+      formData.append('wbT', qualityData.wbT || '0');
+      formData.append('paddyWb', paddyWbEnabled ? qualityData.paddyWb || '0' : '0');
       // reportedBy will be auto-filled by backend from logged-in user
       formData.append('reportedBy', user?.username || 'Unknown');
-      
+
       if (qualityData.uploadFile) {
         formData.append('photo', qualityData.uploadFile);
       }
@@ -250,7 +411,7 @@ const SampleEntryPage: React.FC = () => {
         `${API_URL}/sample-entries/${selectedEntry.id}/quality-parameters`,
         formData,
         {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
           }
@@ -267,117 +428,377 @@ const SampleEntryPage: React.FC = () => {
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         marginBottom: '15px',
-        alignItems: 'center'
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '10px'
       }}>
-        <h2 style={{ margin: 0, color: '#333', fontSize: '20px' }}>Sample Entry</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <h2 style={{ margin: 0, color: '#333', fontSize: '20px' }}>NEW PADDY SAMPLE</h2>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => { setEntryType('CREATE_NEW'); setShowModal(true); }}
-            style={{ 
-              padding: '8px 16px', 
+            onClick={() => {
+              setEntryType('CREATE_NEW');
+              setFormData(prev => ({ ...prev, sampleCollectedBy: '', sampleGivenToOffice: false }));
+              setShowModal(true);
+            }}
+            style={{
+              padding: '8px 16px',
               cursor: 'pointer',
               backgroundColor: '#4CAF50',
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
-              fontSize: '13px'
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              boxShadow: '0 2px 4px rgba(76,175,80,0.3)'
             }}
           >
-            Create New
+            NEW PADDY SAMPLE
           </button>
           <button
-            onClick={() => { setEntryType('DIRECT_LOADED_VEHICLE'); setShowModal(true); }}
-            style={{ 
-              padding: '8px 16px', 
+            onClick={() => {
+              setEntryType('DIRECT_LOADED_VEHICLE');
+              setFormData(prev => ({ ...prev, sampleCollectedBy: '', sampleGivenToOffice: false }));
+              setShowModal(true);
+            }}
+            style={{
+              padding: '8px 16px',
               cursor: 'pointer',
               backgroundColor: '#2196F3',
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
-              fontSize: '13px'
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              boxShadow: '0 2px 4px rgba(33,150,243,0.3)'
             }}
           >
-            Direct Loaded Vehicle
+            READY LORRY
+          </button>
+          <button
+            onClick={() => {
+              setEntryType('LOCATION_SAMPLE');
+              setFormData(prev => ({ ...prev, sampleCollectedBy: user?.username || '', sampleGivenToOffice: false }));
+              setShowModal(true);
+            }}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              backgroundColor: '#FF9800',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              boxShadow: '0 2px 4px rgba(255,152,0,0.3)'
+            }}
+          >
+            LOCATION SAMPLE
           </button>
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div style={{
+        display: 'flex',
+        gap: '0',
+        marginBottom: '15px',
+        borderBottom: '2px solid #e0e0e0'
+      }}>
+        {(['MILL_SAMPLE', 'LOCATION_SAMPLE', 'SAMPLE_BOOK'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderBottom: activeTab === tab ? '3px solid #4a90e2' : '3px solid transparent',
+              backgroundColor: activeTab === tab ? '#fff' : 'transparent',
+              color: activeTab === tab ? '#4a90e2' : '#666',
+              fontWeight: activeTab === tab ? '700' : '500',
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              marginBottom: '-2px'
+            }}
+          >
+            {tab === 'MILL_SAMPLE' ? 'MILL SAMPLE' : tab === 'LOCATION_SAMPLE' ? 'LOCATION SAMPLE' : 'SAMPLE BOOK'}
+          </button>
+        ))}
+      </div>
+
+      {/* Collapsible Filter Bar */}
+      <div style={{ marginBottom: '12px' }}>
+        <button
+          onClick={() => setFiltersVisible(!filtersVisible)}
+          style={{
+            padding: '7px 16px',
+            backgroundColor: filtersVisible ? '#e74c3c' : '#3498db',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          {filtersVisible ? '✕ Hide Filters' : '🔍 Filters'}
+        </button>
+        {filtersVisible && (
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            marginTop: '8px',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            backgroundColor: '#fff',
+            padding: '10px 14px',
+            borderRadius: '6px',
+            border: '1px solid #e0e0e0'
+          }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>From Date</label>
+              <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>To Date</label>
+              <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>Broker</label>
+              <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)}
+                style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px', minWidth: '140px', backgroundColor: 'white' }}>
+                <option value="">All Brokers</option>
+                {brokers.map((b, i) => <option key={i} value={b}>{b}</option>)}
+              </select>
+            </div>
+            {(filterDateFrom || filterDateTo || filterBroker) && (
+              <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setFilterBroker(''); }}
+                style={{ padding: '5px 12px', border: '1px solid #e74c3c', borderRadius: '4px', backgroundColor: '#fff', color: '#e74c3c', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
+                Clear Filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Entries Table */}
-      <div style={{ 
+      <div style={{
         overflowX: 'auto',
         backgroundColor: 'white',
         border: '1px solid #ddd'
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#4a90e2', color: 'white' }}>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Date</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Type</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Broker</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Variety</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Party</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Location</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Bags</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Status</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Quality Check</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={10} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</td></tr>
-            ) : entries.length === 0 ? (
-              <tr><td colSpan={10} style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No entries found</td></tr>
-            ) : (
-              entries.map((entry, index) => (
-                <tr key={entry.id} style={{ 
-                  backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white'
-                }}>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{new Date(entry.entryDate).toLocaleDateString()}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.entryType}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.brokerName}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.variety}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.partyName}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.location}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px' }}>{entry.bags}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '10px' }}>{entry.workflowStatus}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '10px', textAlign: 'center' }}>
-                    {entry.workflowStatus === 'QUALITY_CHECK' || entry.workflowStatus === 'LOT_SELECTION' || entry.workflowStatus === 'COOKING_REPORT' || entry.workflowStatus === 'FINAL_REPORT' || entry.workflowStatus === 'COMPLETED' ? (
-                      <span style={{ color: '#4CAF50', fontWeight: '600' }}>✓ Done</span>
-                    ) : entry.workflowStatus === 'STAFF_ENTRY' ? (
-                      <span style={{ color: '#FF9800' }}>Pending</span>
-                    ) : (
-                      <span style={{ color: '#999' }}>-</span>
-                    )}
-                  </td>
-                  <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
-                    <button 
-                      onClick={() => handleViewEntry(entry)}
-                      style={{ 
-                        fontSize: '10px', 
-                        padding: '4px 8px',
-                        backgroundColor: '#2196F3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {(() => {
+          const filteredEntries = entries.filter((entry) => {
+            // Tab filter
+            if (activeTab === 'LOCATION_SAMPLE') {
+              if (entry.entryType !== 'LOCATION_SAMPLE') return false;
+              if ((entry as any).sampleGivenToOffice) return false; // If given to Mill, hide from Location Sample tab
+            }
+            if (activeTab === 'MILL_SAMPLE') {
+              // Exclude Location Samples unless they are marked as 'given to office'
+              if (entry.entryType === 'LOCATION_SAMPLE' && !(entry as any).sampleGivenToOffice) {
+                return false;
+              }
+            }
+            // SAMPLE_BOOK shows all entries
+
+            // Date filters
+            if (filterDateFrom) {
+              const entryDate = new Date(entry.entryDate).toISOString().split('T')[0];
+              if (entryDate < filterDateFrom) return false;
+            }
+            if (filterDateTo) {
+              const entryDate = new Date(entry.entryDate).toISOString().split('T')[0];
+              if (entryDate > filterDateTo) return false;
+            }
+            // Broker filter
+            if (filterBroker && entry.brokerName !== filterBroker) return false;
+            return true;
+          });
+
+          // Group entries by date, then by broker within date
+          const grouped: Record<string, Record<string, typeof filteredEntries>> = {};
+          filteredEntries.forEach(entry => {
+            const dateKey = new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const brokerKey = entry.brokerName || 'Unknown';
+            if (!grouped[dateKey]) grouped[dateKey] = {};
+            if (!grouped[dateKey][brokerKey]) grouped[dateKey][brokerKey] = [];
+            grouped[dateKey][brokerKey].push(entry);
+          });
+
+          if (loading) {
+            return <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</div>;
+          }
+          if (filteredEntries.length === 0) {
+            return <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No entries found</div>;
+          }
+
+          let slNo = 0;
+          return Object.entries(grouped).map(([dateKey, brokerGroups]) => (
+            <div key={dateKey} style={{ marginBottom: '16px' }}>
+              {/* Date Header */}
+              <div style={{
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                color: 'white',
+                padding: '8px 12px',
+                fontWeight: '700',
+                fontSize: '13px',
+                letterSpacing: '0.5px'
+              }}>
+                📅 {dateKey}
+              </div>
+              {Object.entries(brokerGroups).map(([brokerName, brokerEntries]) => (
+                <div key={brokerName}>
+                  {/* Broker Sub-Header */}
+                  <div style={{
+                    backgroundColor: '#e8f4fd',
+                    padding: '6px 12px',
+                    fontWeight: '600',
+                    fontSize: '12px',
+                    color: '#2c3e50',
+                    borderBottom: '1px solid #bdd7ee',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    👤 {brokerName}
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#4a90e2', color: 'white' }}>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px', width: '40px' }}>SL</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Bags</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Packaging</th>
+                        {(entryType === 'DIRECT_LOADED_VEHICLE' || activeTab !== 'LOCATION_SAMPLE') && <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Lorry No</th>}
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Variety</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Party</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Paddy Location</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Sample Reports</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {brokerEntries.map((entry, index) => {
+                        slNo++;
+                        const hasQuality = entry.workflowStatus !== 'STAFF_ENTRY';
+
+                        const handleNextClick = () => {
+                          handleViewEntry(entry);
+                        };
+
+                        return (
+                          <tr key={entry.id} style={{
+                            backgroundColor: entry.entryType === 'DIRECT_LOADED_VEHICLE'
+                              ? (index % 2 === 0 ? '#e3f2fd' : '#bbdefb')  // Blue for Ready Lorry
+                              : entry.entryType === 'LOCATION_SAMPLE'
+                                ? (index % 2 === 0 ? '#fff3e0' : '#ffe0b2')  // Orange for Location Sample
+                                : (index % 2 === 0 ? '#f9f9f9' : 'white')  // Default for New Paddy Sample
+                          }}>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>
+                              {slNo}
+                              <div style={{ fontSize: '8px', fontWeight: '700', marginTop: '2px' }}>
+                                {entry.entryType === 'DIRECT_LOADED_VEHICLE' && <span style={{ color: '#1565c0' }}>L</span>}
+                                {entry.entryType === 'LOCATION_SAMPLE' && <span style={{ color: '#e65100' }}>S</span>}
+                                {entry.entryType !== 'DIRECT_LOADED_VEHICLE' && entry.entryType !== 'LOCATION_SAMPLE' && <span style={{ color: '#2e7d32' }}>N</span>}
+                              </div>
+                            </td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>{entry.bags}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{(entry as any).packaging || '75'} Kg</td>
+                            {(entryType === 'DIRECT_LOADED_VEHICLE' || activeTab !== 'LOCATION_SAMPLE') && <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{(entry as any).lorryNumber || '-'}</td>}
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>
+                              {entry.variety}
+                              {hasQuality && <span style={{ marginLeft: '4px', color: '#27ae60', fontSize: '10px' }} title="Quality Completed">✅</span>}
+                            </td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.partyName}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.location}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+                                {hasQuality ? (
+                                  <>
+                                    <span style={{
+                                      fontSize: '10px',
+                                      padding: '4px 8px',
+                                      backgroundColor: '#e8f5e9',
+                                      color: '#2e7d32',
+                                      borderRadius: '3px',
+                                      fontWeight: '700',
+                                      border: '1px solid #c8e6c9'
+                                    }}>
+                                      ✓ Completed
+                                    </span>
+                                    <button
+                                      onClick={() => handleViewEntry(entry)}
+                                      title="Edit Quality Parameters"
+                                      style={{
+                                        fontSize: '10px',
+                                        padding: '4px 8px',
+                                        backgroundColor: '#3498db',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontWeight: '600'
+                                      }}
+                                    >
+                                      Edit Qlty
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => handleNextClick()}
+                                    style={{
+                                      fontSize: '10px',
+                                      padding: '4px 10px',
+                                      backgroundColor: '#e74c3c',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      fontWeight: '700'
+                                    }}
+                                  >
+                                    Next →
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleEditEntry(entry)}
+                                  title="Edit Staff Entry"
+                                  style={{
+                                    fontSize: '10px',
+                                    padding: '4px 8px',
+                                    backgroundColor: '#2980b9',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontWeight: '600'
+                                  }}
+                                >
+                                  Edit Form
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
       </div>
 
-      {/* Modal */}
+      {/* Modal - Full Screen */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -385,85 +806,66 @@ const SampleEntryPage: React.FC = () => {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.7)',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           zIndex: 1000,
-          padding: '80px 20px 20px 20px'
+          padding: '20px',
+          overflowY: 'auto'
         }}>
           <div style={{
             backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '4px',
+            padding: '40px',
+            borderRadius: '8px',
             width: '100%',
-            maxWidth: '500px',
-            maxHeight: 'calc(100vh - 100px)',
+            maxWidth: '900px',
+            minHeight: '90vh',
             overflowY: 'auto',
-            border: '1px solid #ddd'
+            border: '1px solid #ddd',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: '20px', 
-              fontSize: '18px', 
-              fontWeight: '600',
-              color: '#333',
-              borderBottom: '2px solid #4a90e2',
-              paddingBottom: '10px'
+            <div style={{
+              background: entryType === 'CREATE_NEW' ? 'linear-gradient(135deg, #2ecc71, #27ae60)' :
+                entryType === 'DIRECT_LOADED_VEHICLE' ? 'linear-gradient(135deg, #3498db, #2980b9)' :
+                  'linear-gradient(135deg, #e67e22, #d35400)',
+              padding: '16px 24px',
+              borderRadius: '8px 8px 0 0',
+              marginBottom: '20px',
+              marginTop: '-40px',
+              marginLeft: '-40px',
+              marginRight: '-40px',
             }}>
-              {entryType === 'CREATE_NEW' ? 'Create New Entry' : 'Direct Loaded Vehicle'}
-            </h3>
-            <form onSubmit={handleSubmit}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '18px',
+                fontWeight: '700',
+                color: 'white',
+                letterSpacing: '0.5px'
+              }}>
+                {entryType === 'CREATE_NEW' ? '🌾 NEW PADDY SAMPLE' : entryType === 'DIRECT_LOADED_VEHICLE' ? '🚛 READY LORRY' : '📍 LOCATION SAMPLE'}
+              </h3>
+            </div>
+            <form onSubmit={handleSubmitWithConfirm}>
+              {/* 1. Date */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Date</label>
                 <input
                   type="date"
                   value={formData.entryDate}
                   onChange={(e) => setFormData({ ...formData, entryDate: e.target.value })}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px'
-                  }}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px' }}
                   required
                 />
               </div>
 
-              {entryType === 'DIRECT_LOADED_VEHICLE' && (
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Lorry Number</label>
-                  <input
-                    type="text"
-                    value={formData.lorryNumber}
-                    onChange={(e) => handleInputChange('lorryNumber', e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '6px 8px', 
-                      border: '1px solid #ddd', 
-                      borderRadius: '3px',
-                      fontSize: '13px',
-                      textTransform: 'uppercase'
-                    }}
-                  />
-                </div>
-              )}
-
+              {/* 2. Broker Name */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Broker Name</label>
                 <select
                   value={formData.brokerName}
                   onChange={(e) => setFormData({ ...formData, brokerName: e.target.value })}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px',
-                    backgroundColor: 'white',
-                    cursor: 'pointer'
-                  }}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', backgroundColor: 'white', cursor: 'pointer' }}
                   required
                 >
                   <option value="">-- Select Broker --</option>
@@ -473,20 +875,68 @@ const SampleEntryPage: React.FC = () => {
                 </select>
               </div>
 
+              {/* Lorry Number (only for READY LORRY) — right after Broker Name */}
+              {entryType === 'DIRECT_LOADED_VEHICLE' && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Lorry Number</label>
+                  <input
+                    type="text"
+                    value={formData.lorryNumber}
+                    onChange={(e) => handleInputChange('lorryNumber', e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', textTransform: 'uppercase' }}
+                  />
+                </div>
+              )}
+
+              {/* 3. Bags */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Bags</label>
+                <input
+                  type="number"
+                  value={formData.bags}
+                  onChange={(e) => setFormData({ ...formData, bags: e.target.value })}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px' }}
+                  required
+                  min="1"
+                />
+              </div>
+
+              {/* 4. Packaging */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Packaging</label>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                    <input type="radio" name="packaging" value="75" checked={formData.packaging === '75'} onChange={() => setFormData({ ...formData, packaging: '75' })} style={{ accentColor: '#4a90e2' }} />
+                    75 Kg
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                    <input type="radio" name="packaging" value="40" checked={formData.packaging === '40'} onChange={() => setFormData({ ...formData, packaging: '40' })} style={{ accentColor: '#4a90e2' }} />
+                    40 Kg
+                  </label>
+                </div>
+              </div>
+
+              {/* 5. Party Name — NOT for Ready Lorry */}
+              {entryType !== 'DIRECT_LOADED_VEHICLE' && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Party Name</label>
+                  <input
+                    type="text"
+                    value={formData.partyName}
+                    onChange={(e) => handleInputChange('partyName', e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', textTransform: 'uppercase' }}
+                    required
+                  />
+                </div>
+              )}
+
+              {/* 6. Variety */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Variety</label>
                 <select
                   value={formData.variety}
                   onChange={(e) => setFormData({ ...formData, variety: e.target.value })}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px',
-                    backgroundColor: 'white',
-                    cursor: 'pointer'
-                  }}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', backgroundColor: 'white', cursor: 'pointer' }}
                   required
                 >
                   <option value="">-- Select Variety --</option>
@@ -496,66 +946,85 @@ const SampleEntryPage: React.FC = () => {
                 </select>
               </div>
 
+              {/* 7. Paddy Location */}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Party Name</label>
-                <input
-                  type="text"
-                  value={formData.partyName}
-                  onChange={(e) => handleInputChange('partyName', e.target.value)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px',
-                    textTransform: 'uppercase'
-                  }}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Location Sample Collected</label>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Paddy Location</label>
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => handleInputChange('location', e.target.value)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px',
-                    textTransform: 'uppercase'
-                  }}
+                  style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', textTransform: 'uppercase' }}
                   required
                 />
               </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Bags</label>
-                <input
-                  type="number"
-                  value={formData.bags}
-                  onChange={(e) => setFormData({ ...formData, bags: e.target.value })}
-                  style={{ 
-                    width: '100%', 
-                    padding: '6px 8px', 
-                    border: '1px solid #ddd', 
-                    borderRadius: '3px',
-                    fontSize: '13px'
-                  }}
-                  required
-                  min="1"
-                />
-              </div>
+              {/* 8. Sample Collected By — manual input for New Paddy Sample */}
+              {entryType !== 'LOCATION_SAMPLE' && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Sample Collected By</label>
+                  <input
+                    type="text"
+                    value={formData.sampleCollectedBy}
+                    onChange={(e) => handleInputChange('sampleCollectedBy', e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', textTransform: 'uppercase' }}
+                    placeholder="Enter name"
+                  />
+                </div>
+              )}
+
+              {/* Sample Given To — only for LOCATION SAMPLE */}
+              {entryType === 'LOCATION_SAMPLE' && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#555', fontSize: '13px' }}>Sample Given To</label>
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', color: '#555' }}>
+                      <input
+                        type="radio"
+                        name="sampleGivenTo"
+                        checked={!formData.sampleGivenToOffice}
+                        onChange={() => setFormData({ ...formData, sampleGivenToOffice: false, sampleCollectedBy: user?.username || '' })}
+                        style={{ accentColor: '#4a90e2', cursor: 'pointer' }}
+                      />
+                      Given to Staff
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', color: '#555' }}>
+                      <input
+                        type="radio"
+                        name="sampleGivenTo"
+                        checked={formData.sampleGivenToOffice === true}
+                        onChange={() => setFormData({ ...formData, sampleGivenToOffice: true })}
+                        style={{ accentColor: '#4a90e2', cursor: 'pointer' }}
+                      />
+                      Given to Office
+                    </label>
+                  </div>
+                  {/* If Given to Staff — show Staff Name input */}
+                  {!formData.sampleGivenToOffice && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Staff Name</label>
+                      <input
+                        type="text"
+                        value={formData.sampleCollectedBy || ''}
+                        onChange={(e) => handleInputChange('sampleCollectedBy', e.target.value)}
+                        placeholder="Enter staff name"
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '13px', textTransform: 'uppercase' }}
+                      />
+                    </div>
+                  )}
+                  {formData.sampleGivenToOffice && (
+                    <p style={{ margin: '0', fontSize: '11px', color: '#4CAF50', fontWeight: '500' }}>
+                      ✓ This entry will also appear in MILL SAMPLE tab
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  style={{ 
-                    padding: '8px 16px', 
+                  style={{
+                    padding: '8px 16px',
                     cursor: 'pointer',
                     border: '1px solid #ddd',
                     borderRadius: '3px',
@@ -568,11 +1037,11 @@ const SampleEntryPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  style={{ 
-                    padding: '8px 16px', 
-                    cursor: 'pointer', 
+                  style={{
+                    padding: '8px 16px',
+                    cursor: 'pointer',
                     backgroundColor: '#4CAF50',
-                    color: 'white', 
+                    color: 'white',
                     border: 'none',
                     borderRadius: '3px',
                     fontSize: '13px'
@@ -611,10 +1080,10 @@ const SampleEntryPage: React.FC = () => {
             overflowY: 'auto',
             border: '1px solid #ddd'
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: '15px', 
-              fontSize: '18px', 
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: '15px',
+              fontSize: '18px',
               fontWeight: '600',
               color: '#333',
               borderBottom: '2px solid #4a90e2',
@@ -624,10 +1093,10 @@ const SampleEntryPage: React.FC = () => {
             </h3>
 
             {/* Entry Details */}
-            <div style={{ 
-              backgroundColor: '#f5f5f5', 
-              padding: '12px', 
-              borderRadius: '4px', 
+            <div style={{
+              backgroundColor: '#f5f5f5',
+              padding: '12px',
+              borderRadius: '4px',
               marginBottom: '15px',
               fontSize: '12px'
             }}>
@@ -639,8 +1108,9 @@ const SampleEntryPage: React.FC = () => {
               </div>
             </div>
 
-            <form onSubmit={handleSubmitQualityParameters}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <form onSubmit={handleSubmitQualityParametersWithConfirm}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {/* Moisture */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
                     Moisture *
@@ -656,213 +1126,165 @@ const SampleEntryPage: React.FC = () => {
                   />
                 </div>
 
+                {/* Cutting — single column with auto × symbol */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Cutting 1 *
+                    Cutting *
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     required={!hasExistingQualityData}
                     readOnly={hasExistingQualityData}
-                    value={qualityData.cutting1}
-                    onChange={(e) => setQualityData({ ...qualityData, cutting1: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
+                    value={qualityData.cutting}
+                    onChange={(e) => handleCuttingInput(e.target.value)}
+                    placeholder="32×24"
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '14px', fontWeight: '700', letterSpacing: '1px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', textAlign: 'center' }}
                   />
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Cutting 2 *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.cutting2}
-                    onChange={(e) => setQualityData({ ...qualityData, cutting2: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
-                </div>
-
+                {/* Bend — single column with auto × symbol */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
                     Bend *
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
+                    type="text"
                     readOnly={hasExistingQualityData}
                     value={qualityData.bend}
-                    onChange={(e) => setQualityData({ ...qualityData, bend: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
+                    onChange={(e) => handleBendInput(e.target.value)}
+                    placeholder="12×8"
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '14px', fontWeight: '700', letterSpacing: '1px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', textAlign: 'center' }}
                   />
                 </div>
 
+                {/* Mix — always visible input */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Mix S *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.mixS}
-                    onChange={(e) => setQualityData({ ...qualityData, mixS: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Mix *</label>
+                  <input type="number" step="0.01" required={!hasExistingQualityData} readOnly={hasExistingQualityData}
+                    value={qualityData.mix} onChange={(e) => setQualityData({ ...qualityData, mix: e.target.value })}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
                 </div>
 
+                {/* SMix — radio Yes/No toggle */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Mix L *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.mixL}
-                    onChange={(e) => setQualityData({ ...qualityData, mixL: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>SMix</label>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="smixEnabled" checked={smixEnabled} onChange={() => { setSmixEnabled(true); setQualityData({ ...qualityData, mixS: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                    </label>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="smixEnabled" checked={!smixEnabled} onChange={() => { setSmixEnabled(false); setQualityData({ ...qualityData, mixS: '' }); }} disabled={hasExistingQualityData} /> No
+                    </label>
+                  </div>
+                  {smixEnabled && (
+                    <input type="number" step="0.01" readOnly={hasExistingQualityData} value={qualityData.mixS}
+                      onChange={(e) => setQualityData({ ...qualityData, mixS: e.target.value })}
+                      style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
+                  )}
                 </div>
 
+                {/* LMix — radio Yes/No toggle */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Mix *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.mix}
-                    onChange={(e) => setQualityData({ ...qualityData, mix: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>LMix</label>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="lmixEnabled" checked={lmixEnabled} onChange={() => { setLmixEnabled(true); setQualityData({ ...qualityData, mixL: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                    </label>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="lmixEnabled" checked={!lmixEnabled} onChange={() => { setLmixEnabled(false); setQualityData({ ...qualityData, mixL: '' }); }} disabled={hasExistingQualityData} /> No
+                    </label>
+                  </div>
+                  {lmixEnabled && (
+                    <input type="number" step="0.01" readOnly={hasExistingQualityData} value={qualityData.mixL}
+                      onChange={(e) => setQualityData({ ...qualityData, mixL: e.target.value })}
+                      style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
+                  )}
                 </div>
 
+                {/* Kandu */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Kandu *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.kandu}
-                    onChange={(e) => setQualityData({ ...qualityData, kandu: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Kandu *</label>
+                  <input type="number" step="0.01" required={!hasExistingQualityData} readOnly={hasExistingQualityData}
+                    value={qualityData.kandu} onChange={(e) => setQualityData({ ...qualityData, kandu: e.target.value })}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
                 </div>
 
+                {/* Oil */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Oil *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.oil}
-                    onChange={(e) => setQualityData({ ...qualityData, oil: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Oil *</label>
+                  <input type="number" step="0.01" required={!hasExistingQualityData} readOnly={hasExistingQualityData}
+                    value={qualityData.oil} onChange={(e) => setQualityData({ ...qualityData, oil: e.target.value })}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
                 </div>
 
+                {/* SK */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    SK *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.sk}
-                    onChange={(e) => setQualityData({ ...qualityData, sk: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>SK *</label>
+                  <input type="number" step="0.01" required={!hasExistingQualityData} readOnly={hasExistingQualityData}
+                    value={qualityData.sk} onChange={(e) => setQualityData({ ...qualityData, sk: e.target.value })}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
                 </div>
 
+                {/* Grains Count */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Grains Count *
-                  </label>
-                  <input
-                    type="number"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.grainsCount}
-                    onChange={(e) => setQualityData({ ...qualityData, grainsCount: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Grains Count *</label>
+                  <input type="number" required={!hasExistingQualityData} readOnly={hasExistingQualityData}
+                    value={qualityData.grainsCount} onChange={(e) => setQualityData({ ...qualityData, grainsCount: e.target.value })}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    WB (R) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.wbR}
-                    onChange={(e) => setQualityData({ ...qualityData, wbR: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                {/* WB(R) & WB(BK) — single shared Yes/No toggle */}
+                <div style={{ gridColumn: '1 / -1', backgroundColor: '#f0f7ff', padding: '10px', borderRadius: '6px', border: '1px solid #d0e3f7' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', color: '#2c3e50', fontSize: '12px' }}>WB (R) & WB (BK)</label>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="wbEnabled" checked={wbEnabled} onChange={() => { setWbEnabled(true); setQualityData({ ...qualityData, wbR: qualityData.wbR || '0', wbBk: qualityData.wbBk || '0' }); }} disabled={hasExistingQualityData} /> Yes
+                    </label>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="wbEnabled" checked={!wbEnabled} onChange={() => { setWbEnabled(false); setQualityData({ ...qualityData, wbR: '', wbBk: '' }); }} disabled={hasExistingQualityData} /> No
+                    </label>
+                  </div>
+                  {wbEnabled && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '3px', fontWeight: '500', color: '#555', fontSize: '11px' }}>WB (R)</label>
+                        <input type="number" step="0.01" readOnly={hasExistingQualityData} value={qualityData.wbR}
+                          onChange={(e) => setQualityData({ ...qualityData, wbR: e.target.value })}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '3px', fontWeight: '500', color: '#555', fontSize: '11px' }}>WB (BK)</label>
+                        <input type="number" step="0.01" readOnly={hasExistingQualityData} value={qualityData.wbBk}
+                          onChange={(e) => setQualityData({ ...qualityData, wbBk: e.target.value })}
+                          style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* WB(T) — auto-calculated, read-only */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    WB (BK) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.wbBk}
-                    onChange={(e) => setQualityData({ ...qualityData, wbBk: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>WB (T) — Auto</label>
+                  <input type="number" step="0.01" readOnly value={qualityData.wbT}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: '#e8f5e9', fontWeight: '700', cursor: 'not-allowed' }} />
                 </div>
 
+                {/* Paddy WB — radio Yes/No */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    WB (T) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.wbT}
-                    onChange={(e) => setQualityData({ ...qualityData, wbT: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
-                    Paddy WB *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required={!hasExistingQualityData}
-                    readOnly={hasExistingQualityData}
-                    value={qualityData.paddyWb}
-                    onChange={(e) => setQualityData({ ...qualityData, paddyWb: e.target.value })}
-                    style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white', cursor: hasExistingQualityData ? 'not-allowed' : 'text' }}
-                  />
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Paddy WB</label>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="paddyWbEnabled" checked={paddyWbEnabled} onChange={() => { setPaddyWbEnabled(true); setQualityData({ ...qualityData, paddyWb: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                    </label>
+                    <label style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      <input type="radio" name="paddyWbEnabled" checked={!paddyWbEnabled} onChange={() => { setPaddyWbEnabled(false); setQualityData({ ...qualityData, paddyWb: '' }); }} disabled={hasExistingQualityData} /> No
+                    </label>
+                  </div>
+                  {paddyWbEnabled && (
+                    <input type="number" step="0.01" readOnly={hasExistingQualityData} value={qualityData.paddyWb}
+                      onChange={(e) => setQualityData({ ...qualityData, paddyWb: e.target.value })}
+                      style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: hasExistingQualityData ? '#f5f5f5' : 'white' }} />
+                  )}
                 </div>
               </div>
 
@@ -885,11 +1307,11 @@ const SampleEntryPage: React.FC = () => {
                     setShowQualityModal(false);
                     setSelectedEntry(null);
                   }}
-                  style={{ 
-                    padding: '8px 16px', 
+                  style={{
+                    padding: '8px 16px',
                     cursor: 'pointer',
                     backgroundColor: '#6c757d',
-                    color: 'white', 
+                    color: 'white',
                     border: 'none',
                     borderRadius: '3px',
                     fontSize: '13px'
@@ -900,11 +1322,11 @@ const SampleEntryPage: React.FC = () => {
                 {!hasExistingQualityData && (
                   <button
                     type="submit"
-                    style={{ 
-                      padding: '8px 16px', 
+                    style={{
+                      padding: '8px 16px',
                       cursor: 'pointer',
                       backgroundColor: '#4CAF50',
-                      color: 'white', 
+                      color: 'white',
                       border: 'none',
                       borderRadius: '3px',
                       fontSize: '13px'
@@ -918,6 +1340,174 @@ const SampleEntryPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Save Confirmation Dialog - Main Form */}
+      {showSaveConfirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', padding: '24px', width: '380px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)', textAlign: 'center'
+          }}>
+            <h3 style={{ marginBottom: '16px', color: '#333', fontSize: '16px' }}>Confirm Save</h3>
+            <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>Do you want to edit before saving?</p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowSaveConfirm(false)}
+                style={{ padding: '8px 20px', backgroundColor: '#e67e22', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
+              >
+                Yes, Edit
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                style={{ padding: '8px 20px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
+              >
+                No, Save Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Confirmation Dialog - Quality Data */}
+      {showQualitySaveConfirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', padding: '24px', width: '380px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)', textAlign: 'center'
+          }}>
+            <h3 style={{ marginBottom: '16px', color: '#333', fontSize: '16px' }}>Confirm Save Quality Data</h3>
+            <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>Do you want to edit before saving?</p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowQualitySaveConfirm(false)}
+                style={{ padding: '8px 20px', backgroundColor: '#e67e22', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
+              >
+                Yes, Edit
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitQualityParameters}
+                style={{ padding: '8px 20px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
+              >
+                No, Save Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Entry Modal */}
+      {showEditModal && editingEntry && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', padding: '20px', width: '90%', maxWidth: '600px',
+            maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Edit Entry</h3>
+              <button onClick={() => { setShowEditModal(false); setEditingEntry(null); }}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#999' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Date</label>
+                <input type="date" value={formData.entryDate} onChange={(e) => setFormData({ ...formData, entryDate: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Broker Name</label>
+                <input value={formData.brokerName} onChange={(e) => handleInputChange('brokerName', e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Bags</label>
+                <input type="number" value={formData.bags} onChange={(e) => setFormData({ ...formData, bags: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Packaging</label>
+                <select value={formData.packaging} onChange={(e) => setFormData({ ...formData, packaging: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+                  <option value="75">75 Kg</option>
+                  <option value="40">40 Kg</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Variety</label>
+                <input value={formData.variety} onChange={(e) => handleInputChange('variety', e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Party Name</label>
+                <input value={formData.partyName} onChange={(e) => handleInputChange('partyName', e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Paddy Location</label>
+                <input value={formData.location} onChange={(e) => handleInputChange('location', e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Sample Collected By</label>
+                <input value={formData.sampleCollectedBy} onChange={(e) => handleInputChange('sampleCollectedBy', e.target.value)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+              </div>
+              {editingEntry.entryType === 'DIRECT_LOADED_VEHICLE' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Lorry Number</label>
+                  <input value={formData.lorryNumber} onChange={(e) => handleInputChange('lorryNumber', e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowEditModal(false); setEditingEntry(null); }}
+                style={{ padding: '8px 16px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                Cancel
+              </button>
+              <button onClick={handleSaveEdit}
+                style={{ padding: '8px 16px', backgroundColor: '#4a90e2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '16px 0', marginTop: '12px' }}>
+        <button
+          disabled={page <= 1}
+          onClick={() => setPage(p => Math.max(1, p - 1))}
+          style={{ padding: '6px 16px', borderRadius: '4px', border: '1px solid #ccc', background: page <= 1 ? '#eee' : '#fff', cursor: page <= 1 ? 'not-allowed' : 'pointer', fontWeight: '600' }}
+        >
+          ← Prev
+        </button>
+        <span style={{ fontSize: '13px', color: '#666' }}>
+          Page {page} of {totalPages} &nbsp;({totalEntries} total)
+        </span>
+        <button
+          disabled={page >= totalPages}
+          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          style={{ padding: '6px 16px', borderRadius: '4px', border: '1px solid #ccc', background: page >= totalPages ? '#eee' : '#fff', cursor: page >= totalPages ? 'not-allowed' : 'pointer', fontWeight: '600' }}
+        >
+          Next →
+        </button>
+      </div>
     </div>
   );
 };

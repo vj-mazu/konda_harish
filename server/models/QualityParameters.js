@@ -35,7 +35,8 @@ const QualityParameters = sequelize.define('QualityParameters', {
   },
   moisture: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     validate: {
       min: 0,
       max: 100
@@ -43,47 +44,69 @@ const QualityParameters = sequelize.define('QualityParameters', {
   },
   cutting1: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'cutting_1'
   },
   cutting2: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'cutting_2'
   },
   bend: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: 0
+  },
+  bend1: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    defaultValue: 0,
+    field: 'bend_1'
+  },
+  bend2: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    defaultValue: 0,
+    field: 'bend_2'
   },
   mixS: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'mix_s'
   },
   mixL: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'mix_l'
   },
   mix: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: 0
   },
   kandu: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: 0
   },
   oil: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: 0
   },
   sk: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: 0
   },
   grainsCount: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'grains_count',
     validate: {
       min: 0
@@ -91,23 +114,45 @@ const QualityParameters = sequelize.define('QualityParameters', {
   },
   wbR: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'wb_r'
   },
   wbBk: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'wb_bk'
   },
   wbT: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'wb_t'
   },
   paddyWb: {
     type: DataTypes.DECIMAL(5, 2),
-    allowNull: false,
+    allowNull: true,
+    defaultValue: 0,
     field: 'paddy_wb'
+  },
+  smixEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+    field: 'smix_enabled'
+  },
+  lmixEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+    field: 'lmix_enabled'
+  },
+  paddyWbEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+    field: 'paddy_wb_enabled'
   },
   reportedBy: {
     type: DataTypes.STRING(100),
@@ -134,7 +179,7 @@ QualityParameters.associate = (models) => {
     foreignKey: 'sampleEntryId',
     as: 'sampleEntry'
   });
-  
+
   QualityParameters.belongsTo(models.User, {
     foreignKey: 'reportedByUserId',
     as: 'reportedByUser'

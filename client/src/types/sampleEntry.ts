@@ -1,4 +1,4 @@
-export type EntryType = 'CREATE_NEW' | 'DIRECT_LOADED_VEHICLE';
+export type EntryType = 'CREATE_NEW' | 'DIRECT_LOADED_VEHICLE' | 'LOCATION_SAMPLE';
 
 export type WorkflowStatus =
   | 'STAFF_ENTRY'
@@ -35,6 +35,9 @@ export interface SampleEntry {
   location: string;
   bags: number;
   lorryNumber?: string;
+  packaging?: '75' | '40';
+  sampleCollectedBy?: string;
+  sampleGivenToOffice?: boolean;
   workflowStatus: WorkflowStatus;
   offeringPrice?: number;
   priceType?: PriceType;

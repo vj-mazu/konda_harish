@@ -20,10 +20,10 @@ class LotAllotmentService {
       // Get the sample entry to know total bags (for default allottedBags)
       const SampleEntryRepository = require('../repositories/SampleEntryRepository');
       const entry = await SampleEntryRepository.findById(allotmentData.sampleEntryId);
-      
+
       console.log('🔍 DEBUG LotAllotmentService - entry:', JSON.stringify(entry));
       console.log('🔍 DEBUG LotAllotmentService - entry.bags:', entry?.bags);
-      
+
       // Use provided allottedBags or default to total bags from entry
       // If allottedBags is provided and valid, use it; otherwise use entry.bags
       let allottedBags = null;
@@ -48,10 +48,10 @@ class LotAllotmentService {
       // Log audit trail
       await AuditService.logCreate(userId, 'lot_allotments', allotment.id, allotment);
 
-      // Transition workflow to LOT_ALLOTMENT
+      // Transition workflow to PHYSICAL_INSPECTION (entry is already at LOT_ALLOTMENT)
       await WorkflowEngine.transitionTo(
         allotmentData.sampleEntryId,
-        'LOT_ALLOTMENT',
+        'PHYSICAL_INSPECTION',
         userId,
         userRole,
         { lotAllotmentId: allotment.id }

@@ -9,7 +9,7 @@ axios.defaults.baseURL = API_BASE_URL;
 interface User {
   id: number;
   username: string;
-  role: 'staff' | 'manager' | 'admin' | 'quality_supervisor' | 'physical_supervisor' | 'inventory_staff' | 'financial_account';
+  role: 'owner' | 'staff' | 'manager' | 'admin' | 'quality_supervisor' | 'physical_supervisor' | 'inventory_staff' | 'financial_account';
 }
 
 interface AuthContextType {

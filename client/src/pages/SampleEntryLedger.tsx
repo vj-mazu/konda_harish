@@ -560,7 +560,7 @@ const SampleEntryLedger: React.FC = () => {
                   <th style={thStyle}>Broker</th>
                   <th style={thStyle}>Variety</th>
                   <th style={thStyle}>Party</th>
-                  <th style={thStyle}>Location</th>
+                  <th style={thStyle}>Paddy Location</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Bags</th>
                   <th style={thStyle}>Lorry</th>
                   <th style={thStyle}>Status</th>

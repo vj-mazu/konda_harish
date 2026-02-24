@@ -1316,7 +1316,47 @@ const startServer = async () => {
         console.log('⚠️ Migration 94 warning:', error.message);
       }
 
+      // Migration 95: Sample Workflow Enhancements (packaging, offerings, quality fields)
+      try {
+        const sampleWorkflowEnhancements = require('./migrations/95_add_sample_workflow_enhancements');
+        await sampleWorkflowEnhancements.up();
+        console.log('✅ Migration 95: Sample workflow enhancements completed');
+      } catch (error) {
+        console.log('⚠️ Migration 95 warning:', error.message);
+      }
+
       console.log('✅ Migrations completed.');
+
+      // Migration 96: Performance composite indexes for sample_entries (30 lakh optimization)
+      try {
+        const addSampleEntryPerformanceIndexes = require('./migrations/96_add_sample_entry_performance_indexes');
+        await addSampleEntryPerformanceIndexes.up();
+        console.log('✅ Migration 96: Sample entry performance indexes added');
+      } catch (error) {
+        console.log('⚠️ Migration 96 warning:', error.message);
+      }
+
+      // Migration 97: Add enhanced offering/final price fields to sample_entry_offerings
+      try {
+        const addOfferingFinalPriceFields = require('./migrations/97_add_offering_final_price_fields');
+        const queryInterface = sequelize.getQueryInterface();
+        await addOfferingFinalPriceFields.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 97: Enhanced offering/final price fields added');
+      } catch (error) {
+        console.log('⚠️ Migration 97 warning:', error.message);
+      }
+
+      // Migration 98: Manager Fallback Toggles
+      try {
+        const addManagerFallbackToggles = require('./migrations/98_add_manager_fallback_toggles');
+        const queryInterface = sequelize.getQueryInterface();
+        await addManagerFallbackToggles.up(queryInterface, sequelize.Sequelize);
+        console.log('✅ Migration 98: Manager Fallback Toggles added');
+      } catch (error) {
+        console.log('⚠️ Migration 98 warning:', error.message);
+      }
+
+      console.log('✅ All migrations + indexes completed.');
     }
 
     // Default warehouses removed - users should create their own warehouses

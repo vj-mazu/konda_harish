@@ -12,9 +12,9 @@ const AllottingSupervisors: React.FC = () => {
       </h2>
 
       {/* Sub-tabs */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '10px', 
+      <div style={{
+        display: 'flex',
+        gap: '10px',
         marginBottom: '20px',
         borderBottom: '2px solid #e0e0e0'
       }}>
@@ -32,7 +32,7 @@ const AllottingSupervisors: React.FC = () => {
             transition: 'all 0.3s ease'
           }}
         >
-          Pending Assignment
+          Pending Loading Lots
         </button>
         <button
           onClick={() => setActiveTab('allotted')}
@@ -48,7 +48,7 @@ const AllottingSupervisors: React.FC = () => {
             transition: 'all 0.3s ease'
           }}
         >
-          Allotted Supervisors
+          Assigned Loading Lots
         </button>
       </div>
 
