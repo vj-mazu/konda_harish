@@ -168,11 +168,7 @@ router.get('/tabs/sample-book', authenticateToken, async (req, res) => {
 
     const { page = 1, pageSize = 50, broker, variety, party, location, startDate, endDate } = req.query;
 
-    const where = {
-      workflowStatus: {
-        [Op.notIn]: ['STAFF_ENTRY']
-      }
-    };
+    const where = {};
     if (broker) where.brokerName = { [Op.iLike]: `%${broker}%` };
     if (variety) where.variety = { [Op.iLike]: `%${variety}%` };
     if (party) where.partyName = { [Op.iLike]: `%${party}%` };

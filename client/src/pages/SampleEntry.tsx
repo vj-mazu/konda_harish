@@ -203,18 +203,18 @@ const SampleEntryPage: React.FC = () => {
       });
       showNotification('Sample entry created successfully', 'success');
       setShowModal(false);
-      setFormData({
-        entryDate: new Date().toISOString().split('T')[0],
-        brokerName: '',
-        variety: '',
+      setFormData(prev => ({
+        entryDate: prev.entryDate,
+        brokerName: prev.brokerName,
+        variety: prev.variety,
         partyName: '',
         location: '',
         bags: '',
         lorryNumber: '',
-        packaging: '75',
-        sampleCollectedBy: entryType === 'LOCATION_SAMPLE' ? (user?.username || '') : '', // Reset to user name only for location sample
+        packaging: prev.packaging,
+        sampleCollectedBy: entryType === 'LOCATION_SAMPLE' ? (user?.username || '') : '',
         sampleGivenToOffice: false
-      });
+      }));
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to create entry', 'error');
