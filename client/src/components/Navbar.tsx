@@ -321,7 +321,7 @@ const Navbar: React.FC = () => {
         </HamburgerButton>
         <MobileOverlay $open={mobileMenuOpen} onClick={() => setMobileMenuOpen(false)} />
         <NavLinks $mobileOpen={mobileMenuOpen}>
-          <NavLink to="/dashboard" $active={isActive('/dashboard')}>Dashboard</NavLink>
+          {user?.role !== 'staff' && <NavLink to="/dashboard" $active={isActive('/dashboard')}>Dashboard</NavLink>}
           {user && user.role === 'staff' && (
             <NavLink to="/sample-entry" $active={isActive('/sample-entry')}>Sample Entry</NavLink>
           )}
@@ -341,26 +341,26 @@ const Navbar: React.FC = () => {
 
           {/* Ledgers Dropdown - for Manager and Admin */}
           {(user?.role === 'manager' || user?.role === 'admin') && (
-          <DropdownWrapper ref={ledgersRef}>
-            <DropdownTrigger
-              $active={isLedgersActive}
-              onClick={() => {
-                setLedgersDropdownOpen(!ledgersDropdownOpen);
-                setWorkflowDropdownOpen(false);
-              }}
-            >Ledgers ▾</DropdownTrigger>
-            {ledgersDropdownOpen && (
-              <DropdownMenu>
-                <DropdownLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Sample Book</DropdownLink>
-                {user?.role === 'admin' && (
-                  <DropdownLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Sample Reports</DropdownLink>
-                )}
-                <DropdownLink to="/ledger" $active={isActive('/ledger')}>Kunchinittu Ledger</DropdownLink>
-                <DropdownLink to="/rice-ledger" $active={isActive('/rice-ledger')}>Rice Ledger</DropdownLink>
-                <DropdownLink to="/hamali-book" $active={isActive('/hamali-book')}>Hamali Book</DropdownLink>
-              </DropdownMenu>
-            )}
-          </DropdownWrapper>
+            <DropdownWrapper ref={ledgersRef}>
+              <DropdownTrigger
+                $active={isLedgersActive}
+                onClick={() => {
+                  setLedgersDropdownOpen(!ledgersDropdownOpen);
+                  setWorkflowDropdownOpen(false);
+                }}
+              >Ledgers ▾</DropdownTrigger>
+              {ledgersDropdownOpen && (
+                <DropdownMenu>
+                  <DropdownLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Sample Book</DropdownLink>
+                  {user?.role === 'admin' && (
+                    <DropdownLink to="/owner-sample-reports" $active={isActive('/owner-sample-reports')}>Owner Sample Reports</DropdownLink>
+                  )}
+                  <DropdownLink to="/ledger" $active={isActive('/ledger')}>Kunchinittu Ledger</DropdownLink>
+                  <DropdownLink to="/rice-ledger" $active={isActive('/rice-ledger')}>Rice Ledger</DropdownLink>
+                  <DropdownLink to="/hamali-book" $active={isActive('/hamali-book')}>Hamali Book</DropdownLink>
+                </DropdownMenu>
+              )}
+            </DropdownWrapper>
           )}
 
           {/* Show Arrivals/Records for staff too */}

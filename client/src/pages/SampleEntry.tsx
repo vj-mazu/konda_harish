@@ -465,7 +465,7 @@ const SampleEntryPage: React.FC = () => {
               boxShadow: '0 2px 4px rgba(76,175,80,0.3)'
             }}
           >
-            NEW PADDY SAMPLE
+            + Mill Sample
           </button>
           <button
             onClick={() => {
@@ -485,7 +485,7 @@ const SampleEntryPage: React.FC = () => {
               boxShadow: '0 2px 4px rgba(33,150,243,0.3)'
             }}
           >
-            READY LORRY
+            + Ready Lorry
           </button>
           <button
             onClick={() => {
@@ -505,7 +505,7 @@ const SampleEntryPage: React.FC = () => {
               boxShadow: '0 2px 4px rgba(255,152,0,0.3)'
             }}
           >
-            LOCATION SAMPLE
+            + Location Sample
           </button>
         </div>
       </div>
@@ -660,8 +660,9 @@ const SampleEntryPage: React.FC = () => {
                 color: 'white',
                 padding: '8px 12px',
                 fontWeight: '700',
-                fontSize: '13px',
-                letterSpacing: '0.5px'
+                fontSize: '14px',
+                letterSpacing: '0.5px',
+                textAlign: 'center'
               }}>
                 📅 {dateKey}
               </div>
@@ -671,15 +672,13 @@ const SampleEntryPage: React.FC = () => {
                   <div style={{
                     backgroundColor: '#e8f4fd',
                     padding: '6px 12px',
-                    fontWeight: '600',
-                    fontSize: '12px',
+                    fontWeight: '700',
+                    fontSize: '13px',
                     color: '#2c3e50',
                     borderBottom: '1px solid #bdd7ee',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
+                    textAlign: 'center'
                   }}>
-                    👤 {brokerName}
+                    👤 {brokerName} ({brokerEntries.length})
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
@@ -687,11 +686,11 @@ const SampleEntryPage: React.FC = () => {
                         <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px', width: '40px' }}>SL</th>
                         <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Bags</th>
                         <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Packaging</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Party Name</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Paddy Location</th>
                         {(entryType === 'DIRECT_LOADED_VEHICLE' || activeTab !== 'LOCATION_SAMPLE') && <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Lorry No</th>}
                         <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Variety</th>
-                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Party</th>
-                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Paddy Location</th>
-                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' }}>Sample Reports</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px', minWidth: '180px' }}>Sample Reports</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -714,20 +713,20 @@ const SampleEntryPage: React.FC = () => {
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>
                               {slNo}
                               <div style={{ fontSize: '8px', fontWeight: '700', marginTop: '2px' }}>
-                                {entry.entryType === 'DIRECT_LOADED_VEHICLE' && <span style={{ color: '#1565c0' }}>L</span>}
-                                {entry.entryType === 'LOCATION_SAMPLE' && <span style={{ color: '#e65100' }}>S</span>}
-                                {entry.entryType !== 'DIRECT_LOADED_VEHICLE' && entry.entryType !== 'LOCATION_SAMPLE' && <span style={{ color: '#2e7d32' }}>N</span>}
+                                {entry.entryType === 'DIRECT_LOADED_VEHICLE' && <span style={{ color: '#1565c0' }}>RL</span>}
+                                {entry.entryType === 'LOCATION_SAMPLE' && <span style={{ color: '#e65100' }}>LOC</span>}
+                                {entry.entryType !== 'DIRECT_LOADED_VEHICLE' && entry.entryType !== 'LOCATION_SAMPLE' && <span style={{ color: '#2e7d32' }}>MS</span>}
                               </div>
                             </td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>{entry.bags}</td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{(entry as any).packaging || '75'} Kg</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.partyName}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.location}</td>
                             {(entryType === 'DIRECT_LOADED_VEHICLE' || activeTab !== 'LOCATION_SAMPLE') && <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{(entry as any).lorryNumber || '-'}</td>}
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>
                               {entry.variety}
                               {hasQuality && <span style={{ marginLeft: '4px', color: '#27ae60', fontSize: '10px' }} title="Quality Completed">✅</span>}
                             </td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.partyName}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.location}</td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
                               <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
                                 {hasQuality ? (
@@ -1179,7 +1178,7 @@ const SampleEntryPage: React.FC = () => {
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>SMix</label>
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
-                      <input type="radio" name="smixEnabled" checked={smixEnabled} onChange={() => { setSmixEnabled(true); setQualityData({ ...qualityData, mixS: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                      <input type="radio" name="smixEnabled" checked={smixEnabled} onChange={() => { setSmixEnabled(true); setQualityData({ ...qualityData, mixS: '' }); }} disabled={hasExistingQualityData} /> Yes
                     </label>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
                       <input type="radio" name="smixEnabled" checked={!smixEnabled} onChange={() => { setSmixEnabled(false); setQualityData({ ...qualityData, mixS: '' }); }} disabled={hasExistingQualityData} /> No
@@ -1197,7 +1196,7 @@ const SampleEntryPage: React.FC = () => {
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>LMix</label>
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
-                      <input type="radio" name="lmixEnabled" checked={lmixEnabled} onChange={() => { setLmixEnabled(true); setQualityData({ ...qualityData, mixL: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                      <input type="radio" name="lmixEnabled" checked={lmixEnabled} onChange={() => { setLmixEnabled(true); setQualityData({ ...qualityData, mixL: '' }); }} disabled={hasExistingQualityData} /> Yes
                     </label>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
                       <input type="radio" name="lmixEnabled" checked={!lmixEnabled} onChange={() => { setLmixEnabled(false); setQualityData({ ...qualityData, mixL: '' }); }} disabled={hasExistingQualityData} /> No
@@ -1247,7 +1246,7 @@ const SampleEntryPage: React.FC = () => {
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', color: '#2c3e50', fontSize: '12px' }}>WB (R) & WB (BK)</label>
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '6px' }}>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
-                      <input type="radio" name="wbEnabled" checked={wbEnabled} onChange={() => { setWbEnabled(true); setQualityData({ ...qualityData, wbR: qualityData.wbR || '0', wbBk: qualityData.wbBk || '0' }); }} disabled={hasExistingQualityData} /> Yes
+                      <input type="radio" name="wbEnabled" checked={wbEnabled} onChange={() => { setWbEnabled(true); setQualityData({ ...qualityData, wbR: qualityData.wbR || '', wbBk: qualityData.wbBk || '' }); }} disabled={hasExistingQualityData} /> Yes
                     </label>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
                       <input type="radio" name="wbEnabled" checked={!wbEnabled} onChange={() => { setWbEnabled(false); setQualityData({ ...qualityData, wbR: '', wbBk: '' }); }} disabled={hasExistingQualityData} /> No
@@ -1283,7 +1282,7 @@ const SampleEntryPage: React.FC = () => {
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>Paddy WB</label>
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
-                      <input type="radio" name="paddyWbEnabled" checked={paddyWbEnabled} onChange={() => { setPaddyWbEnabled(true); setQualityData({ ...qualityData, paddyWb: '0' }); }} disabled={hasExistingQualityData} /> Yes
+                      <input type="radio" name="paddyWbEnabled" checked={paddyWbEnabled} onChange={() => { setPaddyWbEnabled(true); setQualityData({ ...qualityData, paddyWb: '' }); }} disabled={hasExistingQualityData} /> Yes
                     </label>
                     <label style={{ fontSize: '11px', cursor: 'pointer' }}>
                       <input type="radio" name="paddyWbEnabled" checked={!paddyWbEnabled} onChange={() => { setPaddyWbEnabled(false); setQualityData({ ...qualityData, paddyWb: '' }); }} disabled={hasExistingQualityData} /> No
@@ -1306,6 +1305,19 @@ const SampleEntryPage: React.FC = () => {
                   accept="image/*"
                   onChange={(e) => setQualityData({ ...qualityData, uploadFile: e.target.files?.[0] || null })}
                   style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px' }}
+                />
+              </div>
+
+              {/* Reported By */}
+              <div style={{ marginTop: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555', fontSize: '12px' }}>
+                  Reported By
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={user?.username || 'Unknown'}
+                  style={{ width: '100%', padding: '6px', border: '1px solid #ddd', borderRadius: '3px', fontSize: '12px', backgroundColor: '#f5f5f5', fontWeight: '600', cursor: 'not-allowed' }}
                 />
               </div>
 
