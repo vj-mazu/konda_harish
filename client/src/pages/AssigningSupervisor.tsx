@@ -223,11 +223,11 @@ const AssigningSupervisor: React.FC = () => {
                 const missing = { color: '#e74c3c', fontWeight: '600' as const, fontSize: '10px' };
                 const set = { fontSize: '11px' };
 
-                const needsFill = (o.suteEnabled === false && (o.finalSute == null && o.sute == null)) ||
-                  (o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0)) ||
-                  (o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0)) ||
-                  (o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0)) ||
-                  (o.lfEnabled === false && (o.lf == null || o.lf === 0));
+                const needsFill = (o.suteEnabled === false && !parseFloat(o.finalSute) && !parseFloat(o.sute)) ||
+                  (o.moistureEnabled === false && !parseFloat(o.moistureValue)) ||
+                  (o.hamaliEnabled === false && !parseFloat(o.hamali)) ||
+                  (o.brokerageEnabled === false && !parseFloat(o.brokerage)) ||
+                  (o.lfEnabled === false && !parseFloat(o.lf));
 
                 return (
                   <tr key={entry.id} style={{

@@ -595,11 +595,11 @@ router.post('/:id/lot-allotment', authenticateToken, async (req, res) => {
     if (entry && entry.offering) {
       const o = entry.offering;
       const missingFields = [];
-      if (o.suteEnabled === false && o.finalSute == null && o.sute == null) missingFields.push('Sute');
-      if (o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0)) missingFields.push('Moisture');
-      if (o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0)) missingFields.push('Hamali');
-      if (o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0)) missingFields.push('Brokerage');
-      if (o.lfEnabled === false && (o.lf == null || o.lf === 0)) missingFields.push('LF');
+      if (o.suteEnabled === false && !parseFloat(o.finalSute) && !parseFloat(o.sute)) missingFields.push('Sute');
+      if (o.moistureEnabled === false && !parseFloat(o.moistureValue)) missingFields.push('Moisture');
+      if (o.hamaliEnabled === false && !parseFloat(o.hamali)) missingFields.push('Hamali');
+      if (o.brokerageEnabled === false && !parseFloat(o.brokerage)) missingFields.push('Brokerage');
+      if (o.lfEnabled === false && !parseFloat(o.lf)) missingFields.push('LF');
       if (missingFields.length > 0) {
         return res.status(400).json({
           error: `Manager must fill missing fields before assigning supervisor: ${missingFields.join(', ')}. Update in Loading Lots tab first.`

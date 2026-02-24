@@ -176,11 +176,11 @@ const AdminSampleBook: React.FC = () => {
                             const hasOffer = offer && (offer.offerRate || offer.offerBaseRateValue);
                             const hasFinal = offer && offer.finalPrice;
                             const needsFill = offer && (
-                                (offer.suteEnabled === false && (offer.finalSute == null && offer.sute == null)) ||
-                                (offer.moistureEnabled === false && (offer.moistureValue == null || offer.moistureValue === 0)) ||
-                                (offer.hamaliEnabled === false && (offer.hamali == null || offer.hamali === 0)) ||
-                                (offer.brokerageEnabled === false && (offer.brokerage == null || offer.brokerage === 0)) ||
-                                (offer.lfEnabled === false && (offer.lf == null || offer.lf === 0))
+                                (offer.suteEnabled === false && !parseFloat(offer.finalSute) && !parseFloat(offer.sute)) ||
+                                (offer.moistureEnabled === false && !parseFloat(offer.moistureValue)) ||
+                                (offer.hamaliEnabled === false && !parseFloat(offer.hamali)) ||
+                                (offer.brokerageEnabled === false && !parseFloat(offer.brokerage)) ||
+                                (offer.lfEnabled === false && !parseFloat(offer.lf))
                             );
                             return (
                                 <tr key={e.id} style={{ background: i % 2 === 0 ? '#fff' : '#faf5ff', borderBottom: '1px solid #eee' }}>

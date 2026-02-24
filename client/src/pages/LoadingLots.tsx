@@ -236,11 +236,11 @@ const LoadingLots: React.FC = () => {
                                 {dateEntries.map((e, i) => {
                                     const o = e.offering || {};
                                     // Check which fields the admin left blank (disabled) that need manager fill
-                                    const suteMissing = o.suteEnabled === false && o.finalSute == null && o.sute == null;
-                                    const mstMissing = o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0);
-                                    const hamaliMissing = o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0);
-                                    const bkrgMissing = o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0);
-                                    const lfMissing = o.lfEnabled === false && (o.lf == null || o.lf === 0);
+                                    const suteMissing = o.suteEnabled === false && !parseFloat(o.finalSute) && !parseFloat(o.sute);
+                                    const mstMissing = o.moistureEnabled === false && !parseFloat(o.moistureValue);
+                                    const hamaliMissing = o.hamaliEnabled === false && !parseFloat(o.hamali);
+                                    const bkrgMissing = o.brokerageEnabled === false && !parseFloat(o.brokerage);
+                                    const lfMissing = o.lfEnabled === false && !parseFloat(o.lf);
                                     const needsFill = suteMissing || mstMissing || hamaliMissing || bkrgMissing || lfMissing;
 
                                     const cellStyle = (missing: boolean) => ({
