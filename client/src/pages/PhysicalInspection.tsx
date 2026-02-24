@@ -495,41 +495,39 @@ const PhysicalInspection: React.FC = () => {
                               </div>
                               <div>
                                 <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', fontWeight: '600' }}>
-                                  Cutting 1 *
+                                  Cutting *
                                 </label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={inspectionData[entry.id]?.cutting1 || ''}
-                                  onChange={(e) => handleInputChange(entry.id, 'cutting1', Number(e.target.value))}
-                                  placeholder="Enter cutting 1"
-                                  style={{
-                                    width: '100%',
-                                    padding: '6px',
-                                    fontSize: '11px',
-                                    border: '1px solid #ddd',
-                                    borderRadius: '3px'
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', fontWeight: '600' }}>
-                                  Cutting 2 *
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={inspectionData[entry.id]?.cutting2 || ''}
-                                  onChange={(e) => handleInputChange(entry.id, 'cutting2', Number(e.target.value))}
-                                  placeholder="Enter cutting 2"
-                                  style={{
-                                    width: '100%',
-                                    padding: '6px',
-                                    fontSize: '11px',
-                                    border: '1px solid #ddd',
-                                    borderRadius: '3px'
-                                  }}
-                                />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={inspectionData[entry.id]?.cutting1 || ''}
+                                    onChange={(e) => handleInputChange(entry.id, 'cutting1', Number(e.target.value))}
+                                    placeholder="Cutting 1"
+                                    style={{
+                                      flex: 1,
+                                      padding: '6px',
+                                      fontSize: '11px',
+                                      border: '1px solid #ddd',
+                                      borderRadius: '3px'
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#555' }}>x</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={inspectionData[entry.id]?.cutting2 || ''}
+                                    onChange={(e) => handleInputChange(entry.id, 'cutting2', Number(e.target.value))}
+                                    placeholder="Cutting 2"
+                                    style={{
+                                      flex: 1,
+                                      padding: '6px',
+                                      fontSize: '11px',
+                                      border: '1px solid #ddd',
+                                      borderRadius: '3px'
+                                    }}
+                                  />
+                                </div>
                               </div>
                               <div>
                                 <label style={{ display: 'block', marginBottom: '5px', fontSize: '11px', fontWeight: '600' }}>
