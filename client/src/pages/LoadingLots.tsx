@@ -227,8 +227,8 @@ const LoadingLots: React.FC = () => {
                                 <tr>
                                     <td colSpan={17} style={{
                                         background: 'linear-gradient(135deg, #f39c12, #e67e22)',
-                                        color: 'white', padding: '6px 12px', fontWeight: '700',
-                                        fontSize: '12px', letterSpacing: '0.5px'
+                                        color: 'white', padding: '8px 12px', fontWeight: '700',
+                                        fontSize: '13px', letterSpacing: '0.5px', textAlign: 'center'
                                     }}>
                                         📅 {dateStr} — {dateEntries.length} {dateEntries.length === 1 ? 'lot' : 'lots'}
                                     </td>
@@ -371,18 +371,15 @@ const LoadingLots: React.FC = () => {
                 return (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
                         <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '10px', width: '90%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-                            <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', fontSize: '16px' }}>
-                                📋 Update Values — {selectedEntry.brokerName} ({selectedEntry.variety})
+                            <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', fontSize: '16px', textAlign: 'center' }}>
+                                👤 {selectedEntry.brokerName}
                             </h3>
 
-                            {/* Entry Info */}
-                            <div style={{ background: '#f8f9fa', padding: '10px 14px', borderRadius: '6px', marginBottom: '16px', border: '1px solid #e0e0e0' }}>
-                                <div style={{ fontSize: '12px', color: '#666', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                                    <span><b>Party:</b> {selectedEntry.partyName}</span>
-                                    <span><b>Bags:</b> {selectedEntry.bags}</span>
-                                    <span><b>Location:</b> {selectedEntry.location || '-'}</span>
-                                    <span><b>Date:</b> {new Date(selectedEntry.entryDate).toLocaleDateString('en-IN')}</span>
-                                </div>
+                            {/* Entry Info — one line */}
+                            <div style={{ background: '#f8f9fa', padding: '8px 14px', borderRadius: '6px', marginBottom: '14px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                                <span style={{ fontSize: '12px', color: '#333' }}>
+                                    <b>{selectedEntry.bags}</b> Bags | <b>{selectedEntry.packaging || '75'}</b> Kg | <b>{selectedEntry.partyName}</b> | <b>{selectedEntry.location || '-'}</b> | <b>{selectedEntry.variety}</b>
+                                </span>
                             </div>
 
                             {/* Admin-Set Values (Read-Only) */}

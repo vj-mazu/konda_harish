@@ -664,29 +664,25 @@ const FinalReport: React.FC = () => {
           zIndex: 1000, padding: '20px'
         }}>
           <div style={{
-            backgroundColor: 'white', padding: '30px', borderRadius: '12px',
-            width: '100%', maxWidth: '1400px', height: '95vh',
+            backgroundColor: 'white', padding: '24px', borderRadius: '12px',
+            width: '100%', maxWidth: '800px', maxHeight: '90vh',
             boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
             overflowY: 'auto'
           }}>
             <h3 style={{
-              marginTop: 0, marginBottom: '20px', fontSize: '22px', fontWeight: '700',
-              color: '#2c3e50', borderBottom: '3px solid #3498db', paddingBottom: '12px',
-              position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10
+              marginTop: 0, marginBottom: '14px', fontSize: '18px', fontWeight: '700',
+              color: '#2c3e50', borderBottom: '3px solid #3498db', paddingBottom: '10px',
+              textAlign: 'center'
             }}>
-              Set Offering Price
+              👤 {selectedEntry.brokerName}
             </h3>
 
-            {/* Entry Info */}
+            {/* Entry Info — one line */}
             <div style={{
-              backgroundColor: '#eaf2f8', padding: '10px 12px', borderRadius: '6px',
-              marginBottom: '16px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px'
+              backgroundColor: '#eaf2f8', padding: '8px 12px', borderRadius: '6px',
+              marginBottom: '14px', fontSize: '12px', textAlign: 'center'
             }}>
-              <div><strong>Broker:</strong> {selectedEntry.brokerName}</div>
-              <div><strong>Variety:</strong> {selectedEntry.variety}</div>
-              <div><strong>Bags:</strong> {selectedEntry.bags}</div>
-              <div><strong>Party:</strong> {selectedEntry.partyName}</div>
-              <div><strong>Paddy Location:</strong> {selectedEntry.location}</div>
+              <b>{selectedEntry.bags}</b> Bags | <b>{selectedEntry.packaging || '75'}</b> Kg | <b>{selectedEntry.partyName}</b> | <b>{selectedEntry.location}</b> | <b>{selectedEntry.variety}</b>
             </div>
 
             <form onSubmit={handleSubmitOffer}>
@@ -858,28 +854,25 @@ const FinalReport: React.FC = () => {
           zIndex: 1000, padding: '20px'
         }}>
           <div style={{
-            backgroundColor: 'white', padding: '30px', borderRadius: '12px',
-            width: '100%', maxWidth: '1400px', height: '95vh',
+            backgroundColor: 'white', padding: '24px', borderRadius: '12px',
+            width: '100%', maxWidth: '800px', maxHeight: '90vh',
             boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
             overflowY: 'auto'
           }}>
             <h3 style={{
-              marginTop: 0, marginBottom: '20px', fontSize: '22px', fontWeight: '700',
-              color: '#2c3e50', borderBottom: '3px solid #27ae60', paddingBottom: '12px',
-              position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10
+              marginTop: 0, marginBottom: '14px', fontSize: '18px', fontWeight: '700',
+              color: '#2c3e50', borderBottom: '3px solid #27ae60', paddingBottom: '10px',
+              textAlign: 'center'
             }}>
-              Set Final Price
+              👤 {selectedEntry.brokerName}
             </h3>
 
-            {/* Entry Info */}
+            {/* Entry Info — one line */}
             <div style={{
-              backgroundColor: '#e8f8f5', padding: '12px', borderRadius: '6px',
-              marginBottom: '16px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px'
+              backgroundColor: '#e8f8f5', padding: '8px 12px', borderRadius: '6px',
+              marginBottom: '14px', fontSize: '12px', textAlign: 'center'
             }}>
-              <div><strong>Broker:</strong> {selectedEntry.brokerName}</div>
-              <div><strong>Variety:</strong> {selectedEntry.variety}</div>
-              <div><strong>Bags:</strong> {selectedEntry.bags}</div>
-              <div><strong>Offering:</strong> ₹{selectedEntry.offeringPrice || '-'}</div>
+              <b>{selectedEntry.bags}</b> Bags | <b>{selectedEntry.packaging || '75'}</b> Kg | <b>{selectedEntry.partyName}</b> | <b>{selectedEntry.location}</b> | <b>{selectedEntry.variety}</b>
             </div>
 
             <form onSubmit={handleSubmitFinal}>
@@ -889,7 +882,7 @@ const FinalReport: React.FC = () => {
                 borderRadius: '6px', border: '1px solid #d0d8e0'
               }}>
                 <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '8px' }}>
-                  Auto-Fetched from Offering Price
+                  Offer Values
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>

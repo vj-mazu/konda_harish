@@ -225,8 +225,9 @@ const LotSelection: React.FC = () => {
                 color: 'white',
                 padding: '8px 12px',
                 fontWeight: '700',
-                fontSize: '13px',
-                letterSpacing: '0.5px'
+                fontSize: '14px',
+                letterSpacing: '0.5px',
+                textAlign: 'center'
               }}>
                 📅 {dateKey}
               </div>
@@ -236,15 +237,13 @@ const LotSelection: React.FC = () => {
                   <div style={{
                     backgroundColor: '#e8f4fd',
                     padding: '6px 12px',
-                    fontWeight: '600',
-                    fontSize: '12px',
+                    fontWeight: '700',
+                    fontSize: '13px',
                     color: '#2c3e50',
                     borderBottom: '1px solid #bdd7ee',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
+                    textAlign: 'center'
                   }}>
-                    👤 {brokerName}
+                    👤 {brokerName} ({brokerEntries.length})
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>

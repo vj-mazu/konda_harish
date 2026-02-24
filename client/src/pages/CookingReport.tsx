@@ -217,17 +217,17 @@ const CookingReport: React.FC = () => {
             <div key={dateKey} style={{ marginBottom: '16px' }}>
               <div style={{
                 background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                color: 'white', padding: '8px 12px', fontWeight: '700', fontSize: '13px', letterSpacing: '0.5px'
+                color: 'white', padding: '8px 12px', fontWeight: '700', fontSize: '14px', letterSpacing: '0.5px', textAlign: 'center'
               }}>
                 📅 {dateKey}
               </div>
               {Object.entries(brokerGroups).map(([brokerName, brokerEntries]) => (
                 <div key={brokerName}>
                   <div style={{
-                    backgroundColor: '#e8f4fd', padding: '6px 12px', fontWeight: '600', fontSize: '12px',
-                    color: '#2c3e50', borderBottom: '1px solid #bdd7ee', display: 'flex', alignItems: 'center', gap: '6px'
+                    backgroundColor: '#e8f4fd', padding: '6px 12px', fontWeight: '700', fontSize: '13px',
+                    color: '#2c3e50', borderBottom: '1px solid #bdd7ee', textAlign: 'center'
                   }}>
-                    👤 {brokerName}
+                    👤 {brokerName} ({brokerEntries.length})
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
