@@ -109,17 +109,17 @@ PhysicalInspection.associate = (models) => {
     foreignKey: 'sampleEntryId',
     as: 'sampleEntry'
   });
-  
+
   PhysicalInspection.belongsTo(models.LotAllotment, {
     foreignKey: 'lotAllotmentId',
     as: 'lotAllotment'
   });
-  
+
   PhysicalInspection.belongsTo(models.User, {
     foreignKey: 'reportedByUserId',
     as: 'reportedBy'
   });
-  
+
   PhysicalInspection.hasOne(models.InventoryData, {
     foreignKey: 'physicalInspectionId',
     as: 'inventoryData'
