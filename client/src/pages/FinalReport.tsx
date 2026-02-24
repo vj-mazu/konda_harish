@@ -714,7 +714,7 @@ const FinalReport: React.FC = () => {
 
               {/* Row 3: Offer Base Rate — type select + value + MASTER per bag/quintal toggle */}
               <div style={fieldGroupStyle}>
-                <label style={labelStyle}>Offer Base Rate *</label>
+                <label style={labelStyle}>Offer Rate *</label>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <select value={offerData.baseRateType}
                     onChange={e => setOfferData({ ...offerData, baseRateType: e.target.value })}

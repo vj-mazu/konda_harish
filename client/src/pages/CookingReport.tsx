@@ -109,7 +109,7 @@ const CookingReport: React.FC = () => {
             { toStatus: 'LOT_SELECTION' },
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          showNotification('✅ Medium selected - Lot moved to Lots Passed!', 'success');
+          showNotification('✅ Medium selected - Lot moved to Final Pass Lots!', 'success');
         } catch (transitionErr) {
           console.error('Error transitioning lot:', transitionErr);
         }

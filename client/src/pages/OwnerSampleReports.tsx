@@ -16,9 +16,9 @@ interface TabConfig {
 }
 
 const tabs: TabConfig[] = [
-  { key: 'pending-lots', label: 'PENDING LOTS SELECTION', icon: '📋', color: '#3498db' },
+  { key: 'pending-lots', label: 'Pending (Sample Selection)', icon: '📋', color: '#3498db' },
   { key: 'cooking-report', label: 'Cooking Report', icon: '🍚', color: '#e67e22' },
-  { key: 'lots-passed', label: 'Lots Passed', icon: '✅', color: '#27ae60' },
+  { key: 'lots-passed', label: 'Final Pass Lots', icon: '✅', color: '#27ae60' },
   { key: 'loading-lots', label: 'Loading Lots', icon: '🚚', color: '#f39c12' },
   { key: 'completed-lots', label: 'Completed Lots', icon: '📦', color: '#e74c3c' },
   { key: 'sample-book', label: 'Sample Book', icon: '📖', color: '#8e44ad' },
