@@ -113,12 +113,12 @@ const LoadingLots: React.FC = () => {
                 hamaliEnabled: o.hamaliEnabled,
                 brokerageEnabled: o.brokerageEnabled,
                 lfEnabled: o.lfEnabled,
-                moistureValue: o.moistureValue ?? 0,
-                hamali: o.hamali ?? 0,
+                moistureValue: o.moistureValue ?? null,
+                hamali: o.hamali ?? null,
                 hamaliUnit: o.hamaliUnit ?? 'per_bag',
-                brokerage: o.brokerage ?? 0,
+                brokerage: o.brokerage ?? null,
                 brokerageUnit: o.brokerageUnit ?? 'per_bag',
-                lf: o.lf ?? 0,
+                lf: o.lf ?? null,
                 lfUnit: o.lfUnit ?? 'per_bag',
                 egbValue: o.egbValue ?? 0,
                 customDivisor: o.customDivisor ?? null,
@@ -237,10 +237,10 @@ const LoadingLots: React.FC = () => {
                                     const o = e.offering || {};
                                     // Check which fields the admin left blank (disabled) that need manager fill
                                     const suteMissing = o.suteEnabled === false && o.finalSute == null && o.sute == null;
-                                    const mstMissing = o.moistureEnabled === false && o.moistureValue == null;
-                                    const hamaliMissing = o.hamaliEnabled === false && o.hamali == null;
-                                    const bkrgMissing = o.brokerageEnabled === false && o.brokerage == null;
-                                    const lfMissing = o.lfEnabled === false && o.lf == null;
+                                    const mstMissing = o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0);
+                                    const hamaliMissing = o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0);
+                                    const bkrgMissing = o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0);
+                                    const lfMissing = o.lfEnabled === false && (o.lf == null || o.lf === 0);
                                     const needsFill = suteMissing || mstMissing || hamaliMissing || bkrgMissing || lfMissing;
 
                                     const cellStyle = (missing: boolean) => ({

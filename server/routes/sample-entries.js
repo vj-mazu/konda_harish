@@ -596,10 +596,10 @@ router.post('/:id/lot-allotment', authenticateToken, async (req, res) => {
       const o = entry.offering;
       const missingFields = [];
       if (o.suteEnabled === false && o.finalSute == null && o.sute == null) missingFields.push('Sute');
-      if (o.moistureEnabled === false && o.moistureValue == null) missingFields.push('Moisture');
-      if (o.hamaliEnabled === false && o.hamali == null) missingFields.push('Hamali');
-      if (o.brokerageEnabled === false && o.brokerage == null) missingFields.push('Brokerage');
-      if (o.lfEnabled === false && o.lf == null) missingFields.push('LF');
+      if (o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0)) missingFields.push('Moisture');
+      if (o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0)) missingFields.push('Hamali');
+      if (o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0)) missingFields.push('Brokerage');
+      if (o.lfEnabled === false && (o.lf == null || o.lf === 0)) missingFields.push('LF');
       if (missingFields.length > 0) {
         return res.status(400).json({
           error: `Manager must fill missing fields before assigning supervisor: ${missingFields.join(', ')}. Update in Loading Lots tab first.`

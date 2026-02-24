@@ -224,10 +224,10 @@ const AssigningSupervisor: React.FC = () => {
                 const set = { fontSize: '11px' };
 
                 const needsFill = (o.suteEnabled === false && (o.finalSute == null && o.sute == null)) ||
-                  (o.moistureEnabled === false && o.moistureValue == null) ||
-                  (o.hamaliEnabled === false && o.hamali == null) ||
-                  (o.brokerageEnabled === false && o.brokerage == null) ||
-                  (o.lfEnabled === false && o.lf == null);
+                  (o.moistureEnabled === false && (o.moistureValue == null || o.moistureValue === 0)) ||
+                  (o.hamaliEnabled === false && (o.hamali == null || o.hamali === 0)) ||
+                  (o.brokerageEnabled === false && (o.brokerage == null || o.brokerage === 0)) ||
+                  (o.lfEnabled === false && (o.lf == null || o.lf === 0));
 
                 return (
                   <tr key={entry.id} style={{
