@@ -778,16 +778,18 @@ const SampleEntryPage: React.FC = () => {
                                 )}
                                 <button
                                   onClick={() => handleEditEntry(entry)}
-                                  title="Edit Staff Entry"
+                                  title={hasQuality ? 'Cannot edit after quality check' : 'Edit Staff Entry'}
+                                  disabled={hasQuality}
                                   style={{
                                     fontSize: '10px',
                                     padding: '4px 8px',
-                                    backgroundColor: '#2980b9',
+                                    backgroundColor: hasQuality ? '#bdc3c7' : '#2980b9',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    fontWeight: '600'
+                                    cursor: hasQuality ? 'not-allowed' : 'pointer',
+                                    fontWeight: '600',
+                                    opacity: hasQuality ? 0.6 : 1
                                   }}
                                 >
                                   Edit Form

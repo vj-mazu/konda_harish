@@ -157,7 +157,7 @@ const AdminSampleBook: React.FC = () => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
                         <tr style={{ background: 'linear-gradient(135deg, #6c3483, #8e44ad)', color: 'white' }}>
-                            {['SL', 'Date', 'Broker', 'Bags', 'Pkg', 'Variety', 'Party', 'Location', 'Staff', 'Quality', 'Decision', 'Cooking', 'Final ₹', 'Status', 'Action'].map(h => (
+                            {['SL', 'Date', 'Broker', 'Bags', 'Pkg', 'Party', 'Location', 'Variety', 'Staff', 'Quality', 'Decision', 'Cooking', 'Final ₹', 'Status', 'Action'].map(h => (
                                 <th key={h} style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', whiteSpace: 'nowrap', fontSize: '10px' }}>{h}</th>
                             ))}
                         </tr>
@@ -189,9 +189,9 @@ const AdminSampleBook: React.FC = () => {
                                     <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.brokerName}</td>
                                     <td style={{ padding: '6px', textAlign: 'center', fontWeight: '600', fontSize: '11px' }}>{e.bags}</td>
                                     <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.packaging || '75'}</td>
-                                    <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.variety}</td>
                                     <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.partyName}</td>
                                     <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.location}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center', fontSize: '11px' }}>{e.variety}</td>
                                     <td style={{ padding: '6px', textAlign: 'center', fontSize: '10px' }}>
                                         {e.creator?.username ? (
                                             <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '8px', fontSize: '10px' }}>
