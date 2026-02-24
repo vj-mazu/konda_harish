@@ -175,6 +175,13 @@ const AdminSampleBook: React.FC = () => {
                             const hasCooking = cr && cr.status;
                             const hasOffer = offer && (offer.offerRate || offer.offerBaseRateValue);
                             const hasFinal = offer && offer.finalPrice;
+                            const needsFill = offer && (
+                                (offer.suteEnabled === false && (offer.finalSute == null && offer.sute == null)) ||
+                                (offer.moistureEnabled === false && offer.moistureValue == null) ||
+                                (offer.hamaliEnabled === false && offer.hamali == null) ||
+                                (offer.brokerageEnabled === false && offer.brokerage == null) ||
+                                (offer.lfEnabled === false && offer.lf == null)
+                            );
                             return (
                                 <tr key={e.id} style={{ background: i % 2 === 0 ? '#fff' : '#faf5ff', borderBottom: '1px solid #eee' }}>
                                     <td style={{ padding: '6px', textAlign: 'center', fontWeight: '600', fontSize: '11px' }}>{(i + 1 + (page - 1) * pageSize)}</td>
@@ -210,7 +217,23 @@ const AdminSampleBook: React.FC = () => {
                                     <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: (hasFinal || offer?.finalBaseRate || offer?.offerBaseRateValue) ? '#1565c0' : '#999' }}>
                                         {hasFinal ? `₹${offer.finalPrice}` : offer?.finalBaseRate ? `₹${offer.finalBaseRate}` : offer?.offerBaseRateValue ? `₹${offer.offerBaseRateValue}` : '-'}
                                     </td>
-                                    <td style={{ padding: '6px', textAlign: 'center' }}>{getStatusBadge(e.workflowStatus)}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ marginBottom: hasFinal ? '4px' : '0' }}>{getStatusBadge(e.workflowStatus)}</div>
+                                        {hasFinal && (
+                                            <>
+                                                <div style={{ marginBottom: '2px' }}>
+                                                    <span style={{ padding: '2px 4px', borderRadius: '10px', fontSize: '9px', fontWeight: '700', background: '#d4edda', color: '#155724', whiteSpace: 'nowrap', display: 'inline-block', border: '1px solid #c3e6cb' }}>
+                                                        Admin Added ✅
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span style={{ padding: '2px 4px', borderRadius: '10px', fontSize: '9px', fontWeight: '700', background: needsFill ? '#fff3cd' : '#d4edda', color: needsFill ? '#856404' : '#155724', whiteSpace: 'nowrap', display: 'inline-block', border: needsFill ? '1px solid #ffeeba' : '1px solid #c3e6cb' }}>
+                                                        {needsFill ? 'Manager Missing ⏳' : 'Manager Added ✅✅'}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </td>
                                     <td style={{ padding: '6px', textAlign: 'center' }}>
                                         <button
                                             onClick={() => { setSelectedEntry(e); setShowDetailModal(true); }}

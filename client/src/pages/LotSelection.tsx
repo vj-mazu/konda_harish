@@ -41,6 +41,7 @@ const LotSelection: React.FC = () => {
   const { showNotification } = useNotification();
   const [entries, setEntries] = useState<SampleEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -92,7 +93,9 @@ const LotSelection: React.FC = () => {
   };
 
   const handleDecision = async (entryId: string, decision: string) => {
+    if (isSubmitting) return;
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_URL}/sample-entries/${entryId}/lot-selection`,
@@ -113,6 +116,8 @@ const LotSelection: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to process decision', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -263,15 +268,15 @@ const LotSelection: React.FC = () => {
                             backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white'
                           }}>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>{globalSlNo}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px' }}>{entry.bags}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.bags}</td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.packaging || '75'} Kg</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.variety}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px', cursor: 'pointer', color: '#2980b9', fontWeight: '600' }}
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.variety}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', cursor: 'pointer', color: '#2980b9', fontWeight: '600' }}
                               onClick={() => setDetailEntry(entry)}>
                               {entry.partyName}
                             </td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.location}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px' }}>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.location}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>
                               {entry.qualityParameters?.grainsCount || '-'}
                             </td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>
@@ -285,48 +290,51 @@ const LotSelection: React.FC = () => {
                               <div style={{ display: 'flex', gap: '3px', justifyContent: 'center', flexWrap: 'wrap' }}>
                                 <button
                                   onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')}
+                                  disabled={isSubmitting}
                                   style={{
                                     fontSize: '9px',
                                     padding: '4px 8px',
-                                    backgroundColor: '#e67e22',
-                                    color: 'white',
+                                    backgroundColor: isSubmitting ? '#e0e0e0' : '#e67e22',
+                                    color: isSubmitting ? '#999' : 'white',
                                     border: 'none',
                                     borderRadius: '3px',
-                                    cursor: 'pointer',
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                                     fontWeight: '600'
                                   }}
                                 >
-                                  Pass without Cooking
+                                  {isSubmitting ? '...' : 'Pass without Cooking'}
                                 </button>
                                 <button
                                   onClick={() => handleDecision(entry.id, 'PASS_WITH_COOKING')}
+                                  disabled={isSubmitting}
                                   style={{
                                     fontSize: '9px',
                                     padding: '4px 8px',
-                                    backgroundColor: '#27ae60',
-                                    color: 'white',
+                                    backgroundColor: isSubmitting ? '#e0e0e0' : '#27ae60',
+                                    color: isSubmitting ? '#999' : 'white',
                                     border: 'none',
                                     borderRadius: '3px',
-                                    cursor: 'pointer',
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                                     fontWeight: '600'
                                   }}
                                 >
-                                  Pass with Cooking
+                                  {isSubmitting ? '...' : 'Pass with Cooking'}
                                 </button>
                                 <button
                                   onClick={() => handleDecision(entry.id, 'FAIL')}
+                                  disabled={isSubmitting}
                                   style={{
                                     fontSize: '9px',
                                     padding: '4px 8px',
-                                    backgroundColor: '#e74c3c',
-                                    color: 'white',
+                                    backgroundColor: isSubmitting ? '#e0e0e0' : '#e74c3c',
+                                    color: isSubmitting ? '#999' : 'white',
                                     border: 'none',
                                     borderRadius: '3px',
-                                    cursor: 'pointer',
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                                     fontWeight: '600'
                                   }}
                                 >
-                                  Fail
+                                  {isSubmitting ? '...' : 'Fail'}
                                 </button>
                               </div>
                             </td>
@@ -357,23 +365,49 @@ const LotSelection: React.FC = () => {
           }} onClick={e => e.stopPropagation()}>
             <div style={{
               background: 'linear-gradient(135deg, #2c3e50 0%, #3498db 100%)',
-              padding: '16px 20px', borderRadius: '8px 8px 0 0', color: 'white'
+              padding: '16px 20px', borderRadius: '8px 8px 0 0', color: 'white',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
             }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>
-                {detailEntry.partyName} — Full Details
-              </h3>
-              <p style={{ margin: '4px 0 0', fontSize: '11px', opacity: 0.8 }}>
-                {detailEntry.brokerName} | {new Date(detailEntry.entryDate).toLocaleDateString('en-GB')}
-              </p>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>
+                  {detailEntry.partyName} — Complete Details
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '11px', opacity: 0.8 }}>
+                  {detailEntry.brokerName} | {new Date(detailEntry.entryDate).toLocaleDateString('en-GB')}
+                </p>
+              </div>
+              <button onClick={() => setDetailEntry(null)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', fontSize: '16px', color: 'white', fontWeight: '700' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px' }}>
-              <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              {/* Staff Entry Section */}
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '6px' }}>👤 Staff Entry Details</h4>
+              <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse', marginBottom: '16px' }}>
                 <tbody>
                   {[
+                    ['Date', new Date(detailEntry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
+                    ['Broker Name', detailEntry.brokerName],
                     ['Bags', detailEntry.bags],
                     ['Packaging', `${detailEntry.packaging || '75'} Kg`],
                     ['Variety', detailEntry.variety],
-                    ['Location', detailEntry.location],
+                    ['Party Name', detailEntry.partyName],
+                    ['Paddy Location', detailEntry.location],
+                    ['Sample Collected By', (detailEntry as any).sampleCollectedBy || '-'],
+                    ['Lorry Number', (detailEntry as any).lorryNumber || '-'],
+                    ['Supervisor', (detailEntry as any).supervisorName || '-'],
+                  ].map(([label, value], i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: '600', color: '#555', width: '40%', background: i % 2 === 0 ? '#f8f9fa' : 'white' }}>{label}</td>
+                      <td style={{ padding: '6px 8px', color: '#333', background: i % 2 === 0 ? '#f8f9fa' : 'white' }}>{value || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Quality Parameters Section */}
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px' }}>🔬 Quality Parameters</h4>
+              <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                <tbody>
+                  {[
                     ['Moisture', detailEntry.qualityParameters?.moisture],
                     ['Cutting', detailEntry.qualityParameters?.cutting1 && detailEntry.qualityParameters?.cutting2 ? `${detailEntry.qualityParameters.cutting1} x ${detailEntry.qualityParameters.cutting2}` : '-'],
                     ['Bend', detailEntry.qualityParameters?.bend],
@@ -391,8 +425,8 @@ const LotSelection: React.FC = () => {
                     ['Reported By', detailEntry.qualityParameters?.reportedBy],
                   ].map(([label, value], i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: '600', color: '#555', width: '40%' }}>{label}</td>
-                      <td style={{ padding: '6px 8px', color: '#333' }}>{value || '-'}</td>
+                      <td style={{ padding: '6px 8px', fontWeight: '600', color: '#555', width: '40%', background: i % 2 === 0 ? '#f8f9fa' : 'white' }}>{label}</td>
+                      <td style={{ padding: '6px 8px', color: '#333', background: i % 2 === 0 ? '#f8f9fa' : 'white' }}>{value || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

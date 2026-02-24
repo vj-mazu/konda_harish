@@ -76,10 +76,10 @@ interface FinalPriceFormData {
 
 // Shared styles
 const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333', fontSize: '13px' };
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: '#fff' };
-  const radioLabelStyle: React.CSSProperties = { fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' };
-  const radioGroupStyle: React.CSSProperties = { display: 'flex', gap: '12px', justifyContent: 'center' };
-  const fieldGroupStyle: React.CSSProperties = { marginBottom: '16px' };
+const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: '#fff' };
+const radioLabelStyle: React.CSSProperties = { fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' };
+const radioGroupStyle: React.CSSProperties = { display: 'flex', gap: '12px', justifyContent: 'center' };
+const fieldGroupStyle: React.CSSProperties = { marginBottom: '16px' };
 const headerCellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '8px', fontWeight: '600', fontSize: '11px' };
 const dataCellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '6px', fontSize: '11px' };
 
@@ -94,6 +94,7 @@ const FinalReport: React.FC = () => {
   const [offeringCache, setOfferingCache] = useState<{ [key: string]: any }>({});
   const isAdmin = (user?.role as string) === 'admin' || (user?.role as string) === 'owner';
   const isManager = user?.role === 'manager';
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [offerData, setOfferData] = useState<OfferingData>({
     offerRate: '',
@@ -297,9 +298,10 @@ const FinalReport: React.FC = () => {
 
   const handleSubmitOffer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEntry) return;
+    if (!selectedEntry || isSubmitting) return;
 
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_URL}/sample-entries/${selectedEntry.id}/offering-price`,
@@ -334,6 +336,8 @@ const FinalReport: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to save offering price', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -386,9 +390,10 @@ const FinalReport: React.FC = () => {
 
   const handleSubmitFinal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEntry) return;
+    if (!selectedEntry || isSubmitting) return;
 
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_URL}/sample-entries/${selectedEntry.id}/final-price`,
@@ -422,6 +427,8 @@ const FinalReport: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to save final price', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -828,13 +835,13 @@ const FinalReport: React.FC = () => {
 
               {/* Actions */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
-                <button type="button" onClick={() => setShowOfferModal(false)}
-                  style={{ padding: '8px 16px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
+                <button type="button" onClick={() => setShowOfferModal(false)} disabled={isSubmitting}
+                  style={{ padding: '8px 16px', cursor: isSubmitting ? 'not-allowed' : 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
                   Cancel
                 </button>
-                <button type="submit"
-                  style={{ padding: '8px 20px', cursor: 'pointer', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}>
-                  💾 Save Offering Price
+                <button type="submit" disabled={isSubmitting}
+                  style={{ padding: '8px 20px', cursor: isSubmitting ? 'not-allowed' : 'pointer', backgroundColor: isSubmitting ? '#95a5a6' : '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}>
+                  {isSubmitting ? 'Saving...' : '💾 Save Offering Price'}
                 </button>
               </div>
             </form>
@@ -864,275 +871,275 @@ const FinalReport: React.FC = () => {
               Set Final Price
             </h3>
 
-              {/* Entry Info */}
+            {/* Entry Info */}
+            <div style={{
+              backgroundColor: '#e8f8f5', padding: '12px', borderRadius: '6px',
+              marginBottom: '16px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px'
+            }}>
+              <div><strong>Broker:</strong> {selectedEntry.brokerName}</div>
+              <div><strong>Variety:</strong> {selectedEntry.variety}</div>
+              <div><strong>Bags:</strong> {selectedEntry.bags}</div>
+              <div><strong>Offering:</strong> ₹{selectedEntry.offeringPrice || '-'}</div>
+            </div>
+
+            <form onSubmit={handleSubmitFinal}>
+              {/* Auto-fetched from offering */}
               <div style={{
-                backgroundColor: '#e8f8f5', padding: '12px', borderRadius: '6px',
-                marginBottom: '16px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px'
+                ...fieldGroupStyle, backgroundColor: '#f0f4f8', padding: '12px',
+                borderRadius: '6px', border: '1px solid #d0d8e0'
               }}>
-                <div><strong>Broker:</strong> {selectedEntry.brokerName}</div>
-                <div><strong>Variety:</strong> {selectedEntry.variety}</div>
-                <div><strong>Bags:</strong> {selectedEntry.bags}</div>
-                <div><strong>Offering:</strong> ₹{selectedEntry.offeringPrice || '-'}</div>
+                <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '8px' }}>
+                  Auto-Fetched from Offering Price
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={labelStyle}>Sute (auto) {!finalData.suteEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
+                    <input type="number" step="0.01" value={finalData.finalSute}
+                      onChange={e => setFinalData({ ...finalData, finalSute: e.target.value })}
+                      style={{ ...inputStyle, backgroundColor: '#f9f9f9', opacity: finalData.suteEnabled ? 1 : 0.6 }}
+                      readOnly={!finalData.suteEnabled && !isManager} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Sute Unit</label>
+                    <div style={radioGroupStyle}>
+                      <label style={radioLabelStyle}>
+                        <input type="radio" name="finalSuteUnit"
+                          checked={finalData.finalSuteUnit === 'per_kg'}
+                          onChange={() => setFinalData({ ...finalData, finalSuteUnit: 'per_kg' })} /> Per Kg
+                      </label>
+                      <label style={radioLabelStyle}>
+                        <input type="radio" name="finalSuteUnit"
+                          checked={finalData.finalSuteUnit === 'per_ton'}
+                          onChange={() => setFinalData({ ...finalData, finalSuteUnit: 'per_ton' })} /> Per Ton
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <label style={labelStyle}>Final Base Rate (auto)</label>
+                  <input type="number" step="0.01" value={finalData.finalBaseRate}
+                    onChange={e => setFinalData({ ...finalData, finalBaseRate: e.target.value })}
+                    style={{ ...inputStyle, backgroundColor: '#f9f9f9' }} />
+                </div>
               </div>
 
-              <form onSubmit={handleSubmitFinal}>
-                {/* Auto-fetched from offering */}
+              {/* Admin Toggles */}
+              {isAdmin && (
                 <div style={{
-                  ...fieldGroupStyle, backgroundColor: '#f0f4f8', padding: '12px',
-                  borderRadius: '6px', border: '1px solid #d0d8e0'
-                }}>
-                  <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '8px' }}>
-                    Auto-Fetched from Offering Price
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={labelStyle}>Sute (auto) {!finalData.suteEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
-                      <input type="number" step="0.01" value={finalData.finalSute}
-                        onChange={e => setFinalData({ ...finalData, finalSute: e.target.value })}
-                        style={{ ...inputStyle, backgroundColor: '#f9f9f9', opacity: finalData.suteEnabled ? 1 : 0.6 }}
-                        readOnly={!finalData.suteEnabled && !isManager} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Sute Unit</label>
-                      <div style={radioGroupStyle}>
-                        <label style={radioLabelStyle}>
-                          <input type="radio" name="finalSuteUnit"
-                            checked={finalData.finalSuteUnit === 'per_kg'}
-                            onChange={() => setFinalData({ ...finalData, finalSuteUnit: 'per_kg' })} /> Per Kg
-                        </label>
-                        <label style={radioLabelStyle}>
-                          <input type="radio" name="finalSuteUnit"
-                            checked={finalData.finalSuteUnit === 'per_ton'}
-                            onChange={() => setFinalData({ ...finalData, finalSuteUnit: 'per_ton' })} /> Per Ton
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: '8px' }}>
-                    <label style={labelStyle}>Final Base Rate (auto)</label>
-                    <input type="number" step="0.01" value={finalData.finalBaseRate}
-                      onChange={e => setFinalData({ ...finalData, finalBaseRate: e.target.value })}
-                      style={{ ...inputStyle, backgroundColor: '#f9f9f9' }} />
-                  </div>
-                </div>
-
-                {/* Admin Toggles */}
-                {isAdmin && (
-                  <div style={{
-                    ...fieldGroupStyle, backgroundColor: '#fff3e0', padding: '12px',
-                    borderRadius: '6px', border: '1px solid #ffe0b2'
-                  }}>
-                    <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '10px' }}>
-                      👉 Manager Should Fill? (Select "No" for Manager to fill these fields)
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px' }}>
-                      {/* Sute Toggle */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Sute</div>
-                        <div style={radioGroupStyle}>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalSuteEnabled"
-                              checked={finalData.suteEnabled}
-                              onChange={() => setFinalData({ ...finalData, suteEnabled: true })} />
-                            <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
-                          </label>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalSuteEnabled"
-                              checked={!finalData.suteEnabled}
-                              onChange={() => setFinalData({ ...finalData, suteEnabled: false })} />
-                            <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
-                          </label>
-                        </div>
-                      </div>
-                      {/* Moisture Toggle */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Moisture</div>
-                        <div style={radioGroupStyle}>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalMoistureEnabled"
-                              checked={finalData.moistureEnabled}
-                              onChange={() => setFinalData({ ...finalData, moistureEnabled: true })} />
-                            <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
-                          </label>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalMoistureEnabled"
-                              checked={!finalData.moistureEnabled}
-                              onChange={() => setFinalData({ ...finalData, moistureEnabled: false })} />
-                            <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
-                          </label>
-                        </div>
-                      </div>
-                      {/* Hamali Toggle */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Hamali</div>
-                        <div style={radioGroupStyle}>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalHamaliEnabled"
-                              checked={finalData.hamaliEnabled}
-                              onChange={() => setFinalData({ ...finalData, hamaliEnabled: true })} />
-                            <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
-                          </label>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalHamaliEnabled"
-                              checked={!finalData.hamaliEnabled}
-                              onChange={() => setFinalData({ ...finalData, hamaliEnabled: false })} />
-                            <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
-                          </label>
-                        </div>
-                      </div>
-                      {/* Brokerage Toggle */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Brokerage</div>
-                        <div style={radioGroupStyle}>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalBrokerageEnabled"
-                              checked={finalData.brokerageEnabled}
-                              onChange={() => setFinalData({ ...finalData, brokerageEnabled: true })} />
-                            <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
-                          </label>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalBrokerageEnabled"
-                              checked={!finalData.brokerageEnabled}
-                              onChange={() => setFinalData({ ...finalData, brokerageEnabled: false })} />
-                            <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
-                          </label>
-                        </div>
-                      </div>
-                      {/* LF Toggle */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>LF</div>
-                        <div style={radioGroupStyle}>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalLfEnabled"
-                              checked={finalData.lfEnabled}
-                              onChange={() => setFinalData({ ...finalData, lfEnabled: true })} />
-                            <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
-                          </label>
-                          <label style={radioLabelStyle}>
-                            <input type="radio" name="finalLfEnabled"
-                              checked={!finalData.lfEnabled}
-                              onChange={() => setFinalData({ ...finalData, lfEnabled: false })} />
-                            <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Value Fields — Manager sees ALL fields, Admin sees only enabled fields */}
-                <div style={{
-                  ...fieldGroupStyle, backgroundColor: '#f3e5f5', padding: '12px',
-                  borderRadius: '6px', border: '1px solid #e1bee7'
+                  ...fieldGroupStyle, backgroundColor: '#fff3e0', padding: '12px',
+                  borderRadius: '6px', border: '1px solid #ffe0b2'
                 }}>
                   <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '10px' }}>
-                    {isAdmin ? 'Value Fields (Editable by Admin)' : 'Manager Entry — Fill Remaining Values'}
+                    👉 Manager Should Fill? (Select "No" for Manager to fill these fields)
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-
-                    {/* Moisture */}
-                    <div>
-                      <label style={labelStyle}>Moisture (%) {!finalData.moistureEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
-                      <input type="number" step="0.01" value={finalData.moistureValue}
-                        onChange={e => setFinalData({ ...finalData, moistureValue: e.target.value, moistureEnabled: true })}
-                        style={inputStyle} placeholder="Moisture %" />
-                    </div>
-
-                    {/* Hamali */}
-                    <div>
-                      <label style={labelStyle}>Hamali {!finalData.hamaliEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input type="number" step="0.01" value={finalData.hamali}
-                          onChange={e => setFinalData({ ...finalData, hamali: e.target.value, hamaliEnabled: true })}
-                          style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
-                        <select value={finalData.hamaliUnit}
-                          onChange={e => setFinalData({ ...finalData, hamaliUnit: e.target.value, hamaliEnabled: true })}
-                          style={{ ...inputStyle, width: '100px' }}>
-                          <option value="per_bag">Per Bag</option>
-                          <option value="per_quintal">Per Qtl</option>
-                        </select>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px' }}>
+                    {/* Sute Toggle */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Sute</div>
+                      <div style={radioGroupStyle}>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalSuteEnabled"
+                            checked={finalData.suteEnabled}
+                            onChange={() => setFinalData({ ...finalData, suteEnabled: true })} />
+                          <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
+                        </label>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalSuteEnabled"
+                            checked={!finalData.suteEnabled}
+                            onChange={() => setFinalData({ ...finalData, suteEnabled: false })} />
+                          <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
+                        </label>
                       </div>
                     </div>
-
-                    {/* Brokerage */}
-                    <div>
-                      <label style={labelStyle}>Brokerage {!finalData.brokerageEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input type="number" step="0.01" value={finalData.brokerage}
-                          onChange={e => setFinalData({ ...finalData, brokerage: e.target.value, brokerageEnabled: true })}
-                          style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
-                        <select value={finalData.brokerageUnit}
-                          onChange={e => setFinalData({ ...finalData, brokerageUnit: e.target.value, brokerageEnabled: true })}
-                          style={{ ...inputStyle, width: '100px' }}>
-                          <option value="per_bag">Per Bag</option>
-                          <option value="per_quintal">Per Qtl</option>
-                        </select>
+                    {/* Moisture Toggle */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Moisture</div>
+                      <div style={radioGroupStyle}>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalMoistureEnabled"
+                            checked={finalData.moistureEnabled}
+                            onChange={() => setFinalData({ ...finalData, moistureEnabled: true })} />
+                          <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
+                        </label>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalMoistureEnabled"
+                            checked={!finalData.moistureEnabled}
+                            onChange={() => setFinalData({ ...finalData, moistureEnabled: false })} />
+                          <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
+                        </label>
                       </div>
                     </div>
-
-                    {/* LF */}
-                    <div>
-                      <label style={labelStyle}>LF {!finalData.lfEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input type="number" step="0.01" value={finalData.lf}
-                          onChange={e => setFinalData({ ...finalData, lf: e.target.value, lfEnabled: true })}
-                          style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
-                        <select value={finalData.lfUnit}
-                          onChange={e => setFinalData({ ...finalData, lfUnit: e.target.value, lfEnabled: true })}
-                          style={{ ...inputStyle, width: '100px' }}>
-                          <option value="per_bag">Per Bag</option>
-                          <option value="per_quintal">Per Qtl</option>
-                        </select>
+                    {/* Hamali Toggle */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Hamali</div>
+                      <div style={radioGroupStyle}>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalHamaliEnabled"
+                            checked={finalData.hamaliEnabled}
+                            onChange={() => setFinalData({ ...finalData, hamaliEnabled: true })} />
+                          <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
+                        </label>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalHamaliEnabled"
+                            checked={!finalData.hamaliEnabled}
+                            onChange={() => setFinalData({ ...finalData, hamaliEnabled: false })} />
+                          <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
+                        </label>
                       </div>
                     </div>
-
+                    {/* Brokerage Toggle */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Brokerage</div>
+                      <div style={radioGroupStyle}>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalBrokerageEnabled"
+                            checked={finalData.brokerageEnabled}
+                            onChange={() => setFinalData({ ...finalData, brokerageEnabled: true })} />
+                          <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
+                        </label>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalBrokerageEnabled"
+                            checked={!finalData.brokerageEnabled}
+                            onChange={() => setFinalData({ ...finalData, brokerageEnabled: false })} />
+                          <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
+                        </label>
+                      </div>
+                    </div>
+                    {/* LF Toggle */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>LF</div>
+                      <div style={radioGroupStyle}>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalLfEnabled"
+                            checked={finalData.lfEnabled}
+                            onChange={() => setFinalData({ ...finalData, lfEnabled: true })} />
+                          <span style={{ color: '#27ae60', fontWeight: '600' }}>Yes</span>
+                        </label>
+                        <label style={radioLabelStyle}>
+                          <input type="radio" name="finalLfEnabled"
+                            checked={!finalData.lfEnabled}
+                            onChange={() => setFinalData({ ...finalData, lfEnabled: false })} />
+                          <span style={{ color: '#e74c3c', fontWeight: '600' }}>No</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* EGB — only for PD/Loose and MD/Loose */}
-                {(finalData.baseRateType === 'PD_LOOSE' || finalData.baseRateType === 'MD_LOOSE' ||
-                  finalData.baseRateType === 'pd_loose' || finalData.baseRateType === 'md_loose') && (
-                    <div style={fieldGroupStyle}>
-                      <label style={labelStyle}>EGB (Loose type)</label>
-                      <input type="number" step="0.01" value={finalData.egbValue}
-                        onChange={e => setFinalData({ ...finalData, egbValue: e.target.value })}
-                        style={inputStyle} placeholder="EGB value" />
+              {/* Value Fields — Manager sees ALL fields, Admin sees only enabled fields */}
+              <div style={{
+                ...fieldGroupStyle, backgroundColor: '#f3e5f5', padding: '12px',
+                borderRadius: '6px', border: '1px solid #e1bee7'
+              }}>
+                <label style={{ ...labelStyle, fontWeight: '600', color: '#333', marginBottom: '10px' }}>
+                  {isAdmin ? 'Value Fields (Editable by Admin)' : 'Manager Entry — Fill Remaining Values'}
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+
+                  {/* Moisture */}
+                  <div>
+                    <label style={labelStyle}>Moisture (%) {!finalData.moistureEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
+                    <input type="number" step="0.01" value={finalData.moistureValue}
+                      onChange={e => setFinalData({ ...finalData, moistureValue: e.target.value, moistureEnabled: true })}
+                      style={inputStyle} placeholder="Moisture %" />
+                  </div>
+
+                  {/* Hamali */}
+                  <div>
+                    <label style={labelStyle}>Hamali {!finalData.hamaliEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="number" step="0.01" value={finalData.hamali}
+                        onChange={e => setFinalData({ ...finalData, hamali: e.target.value, hamaliEnabled: true })}
+                        style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
+                      <select value={finalData.hamaliUnit}
+                        onChange={e => setFinalData({ ...finalData, hamaliUnit: e.target.value, hamaliEnabled: true })}
+                        style={{ ...inputStyle, width: '100px' }}>
+                        <option value="per_bag">Per Bag</option>
+                        <option value="per_quintal">Per Qtl</option>
+                      </select>
                     </div>
-                  )}
+                  </div>
 
-                {/* Custom Divisor — only for MD/Loose */}
-                {(finalData.baseRateType === 'MD_LOOSE' || finalData.baseRateType === 'md_loose') && (
+                  {/* Brokerage */}
+                  <div>
+                    <label style={labelStyle}>Brokerage {!finalData.brokerageEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="number" step="0.01" value={finalData.brokerage}
+                        onChange={e => setFinalData({ ...finalData, brokerage: e.target.value, brokerageEnabled: true })}
+                        style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
+                      <select value={finalData.brokerageUnit}
+                        onChange={e => setFinalData({ ...finalData, brokerageUnit: e.target.value, brokerageEnabled: true })}
+                        style={{ ...inputStyle, width: '100px' }}>
+                        <option value="per_bag">Per Bag</option>
+                        <option value="per_quintal">Per Qtl</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* LF */}
+                  <div>
+                    <label style={labelStyle}>LF {!finalData.lfEnabled && <span style={{ color: '#e74c3c', fontSize: '10px' }}>(Admin: No)</span>}</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="number" step="0.01" value={finalData.lf}
+                        onChange={e => setFinalData({ ...finalData, lf: e.target.value, lfEnabled: true })}
+                        style={{ ...inputStyle, flex: 1 }} placeholder="Amount" />
+                      <select value={finalData.lfUnit}
+                        onChange={e => setFinalData({ ...finalData, lfUnit: e.target.value, lfEnabled: true })}
+                        style={{ ...inputStyle, width: '100px' }}>
+                        <option value="per_bag">Per Bag</option>
+                        <option value="per_quintal">Per Qtl</option>
+                      </select>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* EGB — only for PD/Loose and MD/Loose */}
+              {(finalData.baseRateType === 'PD_LOOSE' || finalData.baseRateType === 'MD_LOOSE' ||
+                finalData.baseRateType === 'pd_loose' || finalData.baseRateType === 'md_loose') && (
                   <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Custom Divisor (MD/Loose)</label>
-                    <input type="number" step="0.01" value={finalData.customDivisor}
-                      onChange={e => setFinalData({ ...finalData, customDivisor: e.target.value })}
-                      style={inputStyle} placeholder="Custom divisor" />
+                    <label style={labelStyle}>EGB (Loose type)</label>
+                    <input type="number" step="0.01" value={finalData.egbValue}
+                      onChange={e => setFinalData({ ...finalData, egbValue: e.target.value })}
+                      style={inputStyle} placeholder="EGB value" />
                   </div>
                 )}
 
-                {/* Remarks */}
+              {/* Custom Divisor — only for MD/Loose */}
+              {(finalData.baseRateType === 'MD_LOOSE' || finalData.baseRateType === 'md_loose') && (
                 <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Remarks</label>
-                  <textarea value={finalData.remarks}
-                    onChange={e => setFinalData({ ...finalData, remarks: e.target.value })}
-                    style={{ ...inputStyle, minHeight: '50px' }} placeholder="Enter remarks..." />
+                  <label style={labelStyle}>Custom Divisor (MD/Loose)</label>
+                  <input type="number" step="0.01" value={finalData.customDivisor}
+                    onChange={e => setFinalData({ ...finalData, customDivisor: e.target.value })}
+                    style={inputStyle} placeholder="Custom divisor" />
                 </div>
+              )}
 
-                {/* Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
-                  <button type="button" onClick={() => setShowFinalPriceModal(false)}
-                    style={{ padding: '8px 16px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
-                    Cancel
-                  </button>
-                  <button type="submit"
-                    style={{ padding: '8px 20px', cursor: 'pointer', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}>
-                    💾 Save Final Price
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Remarks */}
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>Remarks</label>
+                <textarea value={finalData.remarks}
+                  onChange={e => setFinalData({ ...finalData, remarks: e.target.value })}
+                  style={{ ...inputStyle, minHeight: '50px' }} placeholder="Enter remarks..." />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
+                <button type="button" onClick={() => setShowFinalPriceModal(false)} disabled={isSubmitting}
+                  style={{ padding: '8px 16px', cursor: isSubmitting ? 'not-allowed' : 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmitting}
+                  style={{ padding: '8px 20px', cursor: isSubmitting ? 'not-allowed' : 'pointer', backgroundColor: isSubmitting ? '#95a5a6' : '#27ae60', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}>
+                  {isSubmitting ? 'Saving...' : '💾 Save Final Price'}
+                </button>
+              </div>
+            </form>
           </div>
-        )
+        </div>
+      )
       }
 
       {/* Pagination Controls */}

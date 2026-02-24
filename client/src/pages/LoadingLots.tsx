@@ -44,6 +44,7 @@ const LoadingLots: React.FC = () => {
 
     const [selectedEntry, setSelectedEntry] = useState<SampleEntry | null>(null);
     const [showModal, setShowModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [managerData, setManagerData] = useState({
         sute: '', suteUnit: 'per_kg',
         moistureValue: '',
@@ -97,8 +98,9 @@ const LoadingLots: React.FC = () => {
     };
 
     const handleSaveValues = async () => {
-        if (!selectedEntry) return;
+        if (!selectedEntry || isSubmitting) return;
         try {
+            setIsSubmitting(true);
             const token = localStorage.getItem('token');
             const o = selectedEntry.offering || {};
 
@@ -159,6 +161,8 @@ const LoadingLots: React.FC = () => {
             showNotification('✅ Values saved successfully! Lot moved to Pending Allotting Supervisor', 'success');
         } catch (error: any) {
             showNotification(error.response?.data?.error || 'Failed to save values', 'error');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -303,13 +307,13 @@ const LoadingLots: React.FC = () => {
                                             </td>
                                             <td style={{ padding: '6px', textAlign: 'center' }}>
                                                 <div>
-                                                    <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#d4edda', color: '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px' }}>
-                                                        Admin ✅
+                                                    <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#d4edda', color: '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: '1px solid #c3e6cb' }}>
+                                                        Admin Added ✅
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: needsFill ? '#fff3cd' : '#d4edda', color: needsFill ? '#856404' : '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px' }}>
-                                                        {needsFill ? 'Manager ⏳ Pending' : 'Manager ✅'}
+                                                    <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: needsFill ? '#fff3cd' : '#d4edda', color: needsFill ? '#856404' : '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: needsFill ? '1px solid #ffeeba' : '1px solid #c3e6cb' }}>
+                                                        {needsFill ? 'Manager Missing ⏳' : 'Manager Added ✅✅'}
                                                     </span>
                                                 </div>
                                                 <span style={{ padding: '1px 4px', borderRadius: '8px', fontSize: '9px', fontWeight: '600', background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>
@@ -493,14 +497,15 @@ const LoadingLots: React.FC = () => {
                             )}
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '14px' }}>
-                                <button onClick={() => setShowModal(false)} style={{ padding: '8px 16px', border: '1px solid #ddd', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '13px' }}>Cancel</button>
+                                <button onClick={() => setShowModal(false)} disabled={isSubmitting} style={{ padding: '8px 16px', border: '1px solid #ddd', borderRadius: '6px', background: 'white', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Cancel</button>
                                 {hasDisabledFields && (
-                                    <button onClick={handleSaveValues} style={{
+                                    <button onClick={handleSaveValues} disabled={isSubmitting} style={{
                                         padding: '8px 24px', border: 'none', borderRadius: '6px',
-                                        background: 'linear-gradient(135deg, #27ae60, #2ecc71)',
-                                        color: 'white', fontWeight: '700', cursor: 'pointer', fontSize: '13px'
+                                        background: isSubmitting ? '#95a5a6' : 'linear-gradient(135deg, #27ae60, #2ecc71)',
+                                        color: 'white', fontWeight: '700', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '13px',
+                                        boxShadow: isSubmitting ? 'none' : '0 2px 4px rgba(39, 174, 96, 0.3)'
                                     }}>
-                                        💾 Save Values
+                                        {isSubmitting ? 'Saving...' : '💾 Save Values'}
                                     </button>
                                 )}
                             </div>

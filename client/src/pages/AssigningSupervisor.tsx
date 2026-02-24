@@ -36,6 +36,7 @@ const AssigningSupervisor: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedSupervisors, setSelectedSupervisors] = useState<{ [key: string]: number }>({});
   const [offeringCache, setOfferingCache] = useState<{ [key: string]: any }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -150,6 +151,7 @@ const AssigningSupervisor: React.FC = () => {
   };
 
   const handleAssign = async (entryId: string) => {
+    if (isSubmitting) return;
     const supervisorId = selectedSupervisors[entryId];
 
     if (!supervisorId) {
@@ -158,6 +160,7 @@ const AssigningSupervisor: React.FC = () => {
     }
 
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
 
       // Server-side LotAllotmentService auto-transitions LOT_ALLOTMENT → PHYSICAL_INSPECTION
@@ -181,6 +184,8 @@ const AssigningSupervisor: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to assign supervisor', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -247,8 +252,13 @@ const AssigningSupervisor: React.FC = () => {
                     </td>
                     <td style={{ border: '1px solid #ddd', padding: '6px' }}>
                       {needsFill ? (
-                        <div style={{ fontSize: '11px', color: '#e74c3c', fontStyle: 'italic' }}>
-                          Update financials in Loading Lots tab first
+                        <div style={{ textAlign: 'center' }}>
+                          <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#fff3cd', color: '#856404', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '3px', border: '1px solid #ffeeba' }}>
+                            Manager Missing ⏳
+                          </span>
+                          <div style={{ fontSize: '9px', color: '#e74c3c', fontStyle: 'italic' }}>
+                            Fill values in Loading Lots first
+                          </div>
                         </div>
                       ) : user?.role !== 'manager' ? (
                         <div style={{ fontSize: '11px', color: '#7f8c8d', fontStyle: 'italic' }}>
@@ -275,15 +285,15 @@ const AssigningSupervisor: React.FC = () => {
                     <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center' }}>
                       <button
                         onClick={() => handleAssignClick(entry)}
-                        disabled={needsFill || !selectedSupervisors[entry.id] || user?.role !== 'manager'}
+                        disabled={needsFill || !selectedSupervisors[entry.id] || user?.role !== 'manager' || isSubmitting}
                         style={{
                           fontSize: '10px', padding: '4px 8px',
-                          backgroundColor: (!needsFill && selectedSupervisors[entry.id] && user?.role === 'manager') ? '#4CAF50' : '#ccc',
+                          backgroundColor: (!needsFill && selectedSupervisors[entry.id] && user?.role === 'manager' && !isSubmitting) ? '#4CAF50' : '#ccc',
                           color: 'white', border: 'none', borderRadius: '3px',
-                          cursor: (!needsFill && selectedSupervisors[entry.id] && user?.role === 'manager') ? 'pointer' : 'not-allowed'
+                          cursor: (!needsFill && selectedSupervisors[entry.id] && user?.role === 'manager' && !isSubmitting) ? 'pointer' : 'not-allowed'
                         }}
                       >
-                        Assign
+                        {isSubmitting ? '...' : 'Assign'}
                       </button>
                     </td>
                   </tr>

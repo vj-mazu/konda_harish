@@ -590,6 +590,23 @@ router.get('/:id/offering-data', authenticateToken, async (req, res) => {
 // Create lot allotment (Manager)
 router.post('/:id/lot-allotment', authenticateToken, async (req, res) => {
   try {
+    // Server-side enforcement: block supervisor assignment if manager fields are still missing
+    const entry = await SampleEntryService.getSampleEntryById(req.params.id);
+    if (entry && entry.offering) {
+      const o = entry.offering;
+      const missingFields = [];
+      if (o.suteEnabled === false && o.finalSute == null && o.sute == null) missingFields.push('Sute');
+      if (o.moistureEnabled === false && o.moistureValue == null) missingFields.push('Moisture');
+      if (o.hamaliEnabled === false && o.hamali == null) missingFields.push('Hamali');
+      if (o.brokerageEnabled === false && o.brokerage == null) missingFields.push('Brokerage');
+      if (o.lfEnabled === false && o.lf == null) missingFields.push('LF');
+      if (missingFields.length > 0) {
+        return res.status(400).json({
+          error: `Manager must fill missing fields before assigning supervisor: ${missingFields.join(', ')}. Update in Loading Lots tab first.`
+        });
+      }
+    }
+
     const allotmentData = {
       ...req.body,
       sampleEntryId: req.params.id // Keep as UUID string

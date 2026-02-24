@@ -27,6 +27,7 @@ const SampleEntryPage: React.FC = () => {
   const [lmixEnabled, setLmixEnabled] = useState(false);
   const [paddyWbEnabled, setPaddyWbEnabled] = useState(false);
   const [wbEnabled, setWbEnabled] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters
   const [filterDateFrom, setFilterDateFrom] = useState('');
@@ -178,11 +179,14 @@ const SampleEntryPage: React.FC = () => {
 
   const handleSubmit = async () => {
     setShowSaveConfirm(false);
+    if (isSubmitting) return;
+
     try {
       if (!user || !user.id) {
         showNotification('User not authenticated', 'error');
         return;
       }
+      setIsSubmitting(true);
 
       await sampleEntryApi.createSampleEntry({
         entryDate: formData.entryDate,
@@ -214,6 +218,8 @@ const SampleEntryPage: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to create entry', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -237,8 +243,9 @@ const SampleEntryPage: React.FC = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingEntry) return;
+    if (!editingEntry || isSubmitting) return;
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
       await axios.put(`${API_URL}/sample-entries/${editingEntry.id}`, {
         entryDate: formData.entryDate,
@@ -258,6 +265,8 @@ const SampleEntryPage: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to update entry', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

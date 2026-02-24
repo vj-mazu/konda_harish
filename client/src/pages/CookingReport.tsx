@@ -32,6 +32,7 @@ const CookingReport: React.FC = () => {
     status: '',
     remarks: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters
   const [filtersVisible, setFiltersVisible] = useState(false);
@@ -87,9 +88,10 @@ const CookingReport: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEntry) return;
+    if (!selectedEntry || isSubmitting) return;
 
     try {
+      setIsSubmitting(true);
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_URL}/sample-entries/${selectedEntry.id}/cooking-report`,
@@ -118,6 +120,8 @@ const CookingReport: React.FC = () => {
       loadEntries();
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to add cooking report', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -261,11 +265,11 @@ const CookingReport: React.FC = () => {
                         return (
                           <tr key={entry.id} style={{ backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white' }}>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px', fontWeight: '600' }}>{globalSlNo}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'right', fontSize: '11px' }}>{entry.bags}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.bags}</td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.packaging || '75'} Kg</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.partyName}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.variety}</td>
-                            <td style={{ border: '1px solid #ddd', padding: '6px', fontSize: '11px' }}>{entry.location}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.partyName}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.variety}</td>
+                            <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>{entry.location}</td>
                             <td style={{ border: '1px solid #ddd', padding: '6px', textAlign: 'center', fontSize: '11px' }}>
                               <span style={{
                                 display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
@@ -350,13 +354,13 @@ const CookingReport: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
-                  <button type="button" onClick={() => setShowModal(false)}
-                    style={{ padding: '8px 16px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '3px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
+                  <button type="button" onClick={() => setShowModal(false)} disabled={isSubmitting}
+                    style={{ padding: '8px 16px', cursor: isSubmitting ? 'not-allowed' : 'pointer', border: '1px solid #ddd', borderRadius: '3px', backgroundColor: 'white', fontSize: '13px', color: '#666' }}>
                     Cancel
                   </button>
-                  <button type="submit"
-                    style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '3px', fontSize: '13px', fontWeight: '600' }}>
-                    Save
+                  <button type="submit" disabled={isSubmitting}
+                    style={{ padding: '8px 16px', cursor: isSubmitting ? 'not-allowed' : 'pointer', backgroundColor: isSubmitting ? '#95a5a6' : '#27ae60', color: 'white', border: 'none', borderRadius: '3px', fontSize: '13px', fontWeight: '600' }}>
+                    {isSubmitting ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </form>
