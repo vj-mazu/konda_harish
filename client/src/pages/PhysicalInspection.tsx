@@ -183,12 +183,12 @@ const PhysicalInspection: React.FC = () => {
       return;
     }
 
-      // Validate bags don't exceed remaining
+    // Validate bags don't exceed remaining
     if (progress && data.actualBags > progress.remainingBags) {
       showNotification(`Cannot inspect ${data.actualBags} bags. Only ${progress.remainingBags} bags remaining.`, 'error');
       return;
     }
-    
+
     // Validate bags is not zero or negative
     if (!data.actualBags || data.actualBags <= 0) {
       showNotification('Please enter valid number of bags', 'error');
@@ -307,7 +307,7 @@ const PhysicalInspection: React.FC = () => {
               entries.map((entry, index) => {
                 const progress = inspectionProgress[entry.id];
                 const progressPercentage = progress?.progressPercentage || 0;
-                
+
                 // Check if this is a new lot (different from previous)
                 const prevEntry = entries[index - 1];
                 const isNewLot = !prevEntry || prevEntry.id !== entry.id;
@@ -317,15 +317,15 @@ const PhysicalInspection: React.FC = () => {
                     {/* Add visual gap between different lots */}
                     {isNewLot && index > 0 && (
                       <tr>
-                        <td colSpan={10} style={{ 
-                          height: '15px', 
+                        <td colSpan={10} style={{
+                          height: '15px',
                           backgroundColor: '#e0e0e0',
                           borderLeft: '3px solid #4a90e2',
                           borderRight: '3px solid #4a90e2'
                         }}>
-                          <div style={{ 
-                            fontSize: '10px', 
-                            color: '#666', 
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#666',
                             padding: '0 10px',
                             fontWeight: '600'
                           }}>
@@ -404,8 +404,7 @@ const PhysicalInspection: React.FC = () => {
                                 <th style={{ border: '1px solid #ddd', padding: '4px' }}>Date</th>
                                 <th style={{ border: '1px solid #ddd', padding: '4px' }}>Lorry Number</th>
                                 <th style={{ border: '1px solid #ddd', padding: '4px' }}>Bags</th>
-                                <th style={{ border: '1px solid #ddd', padding: '4px' }}>Cutting 1</th>
-                                <th style={{ border: '1px solid #ddd', padding: '4px' }}>Cutting 2</th>
+                                <th style={{ border: '1px solid #ddd', padding: '4px' }}>Cutting</th>
                                 <th style={{ border: '1px solid #ddd', padding: '4px' }}>Bend</th>
                                 <th style={{ border: '1px solid #ddd', padding: '4px' }}>Inspected By</th>
                               </tr>
@@ -420,8 +419,7 @@ const PhysicalInspection: React.FC = () => {
                                   <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right', fontWeight: '600' }}>
                                     {inspection.bags}
                                   </td>
-                                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{inspection.cutting1}</td>
-                                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{inspection.cutting2}</td>
+                                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'center' }}>{inspection.cutting1} x {inspection.cutting2}</td>
                                   <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{inspection.bend}</td>
                                   <td style={{ border: '1px solid #ddd', padding: '4px' }}>{inspection.reportedBy.username}</td>
                                 </tr>

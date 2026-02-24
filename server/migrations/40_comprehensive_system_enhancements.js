@@ -51,7 +51,7 @@ async function up() {
 
     // 2. Add performance indexes for rice hamali queries
     console.log('📈 Adding performance indexes for rice hamali queries...');
-    
+
     // Check if rice_hamali_entries table exists
     const [riceHamaliTableExists] = await sequelize.query(`
       SELECT table_name 
@@ -73,12 +73,16 @@ async function up() {
         ON rice_hamali_entries(created_at DESC)
       `);
 
-      // Index on entry_type for filtering
-      await sequelize.query(`
-        CREATE INDEX IF NOT EXISTS idx_rice_hamali_entry_type 
-        ON rice_hamali_entries(entry_type) 
-        WHERE entry_type IS NOT NULL
-      `);
+      // Index on entry_type for filtering (may not exist until migration 41)
+      try {
+        await sequelize.query(`
+          CREATE INDEX IF NOT EXISTS idx_rice_hamali_entry_type 
+          ON rice_hamali_entries(entry_type) 
+          WHERE entry_type IS NOT NULL
+        `);
+      } catch (e) {
+        console.log('⚠️ entry_type column not yet available, skipping index');
+      }
 
       // Composite index for common query patterns
       await sequelize.query(`
@@ -94,7 +98,7 @@ async function up() {
 
     // 3. Enhance rice stock foreign key relationships for palti data integrity
     console.log('🔗 Enhancing rice stock foreign key relationships...');
-    
+
     // Check if rice_stock_movements table exists
     const [tableExists] = await sequelize.query(`
       SELECT table_name 
@@ -172,7 +176,7 @@ async function up() {
 
       // 4. Add palti-specific indexes for improved query performance
       console.log('🏃 Adding palti-specific indexes...');
-      
+
       // Index for palti queries by movement type and date
       await sequelize.query(`
         CREATE INDEX IF NOT EXISTS idx_rice_stock_palti_date 
@@ -229,7 +233,7 @@ async function up() {
 
     // 6. Verify the migration
     console.log('🔍 Verifying migration results...');
-    
+
     // Check hamali_entry_status table structure
     const [statusTableInfo] = await sequelize.query(`
       SELECT column_name, data_type, is_nullable 
@@ -271,7 +275,7 @@ async function down() {
 
     // Drop hamali_entry_status table
     await sequelize.query(`DROP TABLE IF EXISTS hamali_entry_status CASCADE`);
-    
+
     // Drop indexes (they will be dropped automatically with the table)
     console.log('✅ Reverted comprehensive system enhancements');
 

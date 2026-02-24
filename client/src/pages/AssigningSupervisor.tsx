@@ -130,11 +130,11 @@ const AssigningSupervisor: React.FC = () => {
     const supervisorId = selectedSupervisors[entry.id];
 
     // Safety check - shouldn't happen due to UI disabled state, but just in case
-    const needsFill = (o.suteEnabled === false && (o.finalSute == null && o.sute == null)) ||
-      (o.moistureEnabled === false && o.moistureValue == null) ||
-      (o.hamaliEnabled === false && o.hamali == null) ||
-      (o.brokerageEnabled === false && o.brokerage == null) ||
-      (o.lfEnabled === false && o.lf == null);
+    const needsFill = (o.suteEnabled === false && !parseFloat(o.finalSute) && !parseFloat(o.sute)) ||
+      (o.moistureEnabled === false && !parseFloat(o.moistureValue)) ||
+      (o.hamaliEnabled === false && !parseFloat(o.hamali)) ||
+      (o.brokerageEnabled === false && !parseFloat(o.brokerage)) ||
+      (o.lfEnabled === false && !parseFloat(o.lf));
 
     if (needsFill) {
       showNotification('Please fill missing financial values in the Loading Lots tab first.', 'error');
